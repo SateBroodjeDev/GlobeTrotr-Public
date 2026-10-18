@@ -1,0 +1,595 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Public editorial pages. Dashboard and white-label application layouts retain
+   their existing styles; accents still follow the shared brand tokens. */
+.marketing-hero h1 {
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+.marketing-hero {
+  isolation: isolate;
+}
+/* Homepage colour rhythm, deliberately scoped away from dashboards and Agency hosts. */
+.homepage {
+  --home-mint: color-mix(in oklab, #47bb9c 17%, var(--background));
+  --home-sand: color-mix(in oklab, #efb15b 19%, var(--background));
+  --home-sky: color-mix(in oklab, #6ea9e6 18%, var(--background));
+  --home-lilac: color-mix(in oklab, #b092d6 16%, var(--background));
+}
+.home-hero {
+  overflow: hidden;
+  border-radius: 2.5rem;
+  background:
+    radial-gradient(ellipse at 95% 5%, color-mix(in oklab, #efb15b 30%, transparent), transparent 54%),
+    radial-gradient(ellipse at 0% 95%, color-mix(in oklab, #47bb9c 22%, transparent), transparent 62%),
+    var(--home-sand);
+  border: 1px solid color-mix(in oklab, #efb15b 25%, var(--border));
+}
+.home-hero::before {
+  content: "";
+  position: absolute;
+  top: -5rem;
+  right: -5rem;
+  width: 19rem;
+  height: 19rem;
+  border: 1px solid color-mix(in oklab, #efb15b 45%, transparent);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2.5rem color-mix(in oklab, #efb15b 8%, transparent), 0 0 0 5rem color-mix(in oklab, #efb15b 5%, transparent);
+  pointer-events: none;
+}
+.home-heading-teal {
+  color: color-mix(in oklab, #167c65 85%, var(--foreground));
+}
+.home-heading-sunset {
+  color: color-mix(in oklab, #a35020 85%, var(--foreground));
+}
+.dark .home-heading-teal {
+  color: #76dbc0;
+}
+.dark .home-heading-sunset {
+  color: #f2bc79;
+}
+.home-audiences .marketing-choice {
+  border: 0;
+  border-radius: 2rem 4rem 2rem 2rem;
+  background: linear-gradient(145deg, var(--home-sand), color-mix(in oklab, var(--home-sand) 40%, var(--background)));
+}
+.home-audiences .marketing-choice--group {
+  border-radius: 4rem 2rem 2rem 2rem;
+  background: linear-gradient(145deg, var(--home-sky), var(--home-mint));
+}
+.home-comparison {
+  border-radius: 2rem;
+}
+.home-comparison > div:first-child {
+  background: var(--home-sand);
+}
+.home-comparison > div:last-child {
+  background: var(--home-mint);
+}
+.home-journey .marketing-journey {
+  border: 0;
+  gap: 1rem;
+}
+.home-journey .marketing-editorial-card {
+  border: 0;
+  border-radius: 1.5rem;
+  background: var(--home-mint);
+}
+.home-journey .marketing-editorial-card:nth-child(2) { background: var(--home-sky); }
+.home-journey .marketing-editorial-card:nth-child(3) { background: var(--home-sand); }
+.home-journey .marketing-editorial-card:nth-child(4) { background: var(--home-lilac); }
+.home-journey .marketing-journey > div > div { padding: 1.5rem; }
+.home-plans {
+  border-radius: 2rem;
+  padding: clamp(1.25rem, 3vw, 2.5rem);
+  background: linear-gradient(110deg, var(--home-sand), var(--background) 75%);
+}
+.home-agency {
+  background: linear-gradient(120deg, var(--home-lilac), var(--home-sky));
+  border-color: color-mix(in oklab, #b092d6 25%, var(--border));
+}
+.home-next {
+  background: var(--home-mint);
+}
+@media (max-width: 640px) {
+  .home-hero { border-radius: 1.5rem; }
+  .marketing-page h2 { font-size: 1.5rem; line-height: 1.25; }
+  .marketing-page a.inline-flex,
+  .privacy-page button,
+  .privacy-page a.inline-flex {
+    max-width: 100%;
+    min-height: 2.75rem;
+    height: auto;
+    white-space: normal;
+    text-align: center;
+  }
+  .home-journey .marketing-journey { gap: 0; border-left: 2px solid var(--primary); }
+  .home-journey .marketing-editorial-card {
+    border-radius: 0;
+    background: transparent;
+    border-bottom: 1px solid var(--border);
+  }
+  .home-journey .marketing-journey > div > div { padding: 1rem; }
+  .home-journey .marketing-journey h3 { margin-top: 0.75rem; }
+  .privacy-storage, .privacy-storage tbody { display: block; width: 100%; }
+  .privacy-storage thead { display: none; }
+  .privacy-storage tr { display: grid; gap: 0.5rem; padding-block: 1rem; }
+  .privacy-storage td { display: block; padding: 0; overflow-wrap: anywhere; }
+  .privacy-storage td::before {
+    content: attr(data-label);
+    display: block;
+    font-family: var(--font-sans);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+}
+.privacy-topic { padding-block: 0.375rem; }
+.privacy-topic summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 3.25rem;
+  padding: 0.875rem 1rem;
+  cursor: pointer;
+  list-style: none;
+  border: 1px solid color-mix(in oklab, var(--border) 55%, transparent);
+  border-radius: 0.875rem;
+  background: color-mix(in oklab, var(--muted) 22%, transparent);
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+.privacy-topic summary::-webkit-details-marker { display: none; }
+.privacy-topic summary:hover,
+.privacy-topic[open] summary {
+  border-color: color-mix(in oklab, var(--primary) 25%, var(--border));
+  background: color-mix(in oklab, var(--primary) 5%, var(--background));
+}
+.privacy-topic summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.privacy-topic h2 { min-width: 0; }
+.privacy-topic-chevron { color: var(--muted-foreground); transition: transform 160ms ease; }
+.privacy-topic[open] .privacy-topic-chevron { transform: rotate(180deg); }
+.privacy-topic > div { padding: 1rem 0.5rem 0.5rem; }
+@media (min-width: 640px) { .privacy-topic > div { padding-inline: 1rem; } }
+@media (prefers-reduced-motion: reduce) {
+  .privacy-topic summary, .privacy-topic-chevron { transition: none; }
+}
+@media print {
+  .privacy-topic > div { display: block !important; }
+  .privacy-topic summary { border: 0; background: transparent; padding-inline: 0; }
+  .privacy-topic-chevron { display: none; }
+}
+.journey-scene {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 48% 48% 2rem 2rem;
+  aspect-ratio: 1.18;
+  background: #dcece5;
+  box-shadow: 0 24px 60px -30px #173e3960;
+}
+.journey-landscape {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.journey-caption {
+  position: absolute;
+  inset: auto 7% 7%;
+  max-width: 85%;
+}
+.journey-note {
+  position: absolute;
+  inset: 45% auto auto 7%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: 86%;
+  padding: 1rem 1.25rem;
+  background: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  box-shadow: 0 12px 30px #173e3920;
+  transform: rotate(-3deg);
+}
+.journey-scene--groups {
+  border-radius: 2rem 8rem 2rem 2rem;
+}
+.journey-scene--groups .journey-note {
+  inset: 36% auto auto 7%;
+  transform: rotate(3deg);
+}
+.journey-group-note {
+  position: absolute;
+  top: 61%;
+  right: 5%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1rem;
+  border-radius: 2rem;
+  background: #f5d9ac;
+  color: #173e39;
+  font-size: 0.8rem;
+  transform: rotate(-3deg);
+}
+.journey-studio {
+  min-width: 0;
+  padding: clamp(1.5rem, 4vw, 2.75rem);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--card);
+  box-shadow: 20px 20px 0 color-mix(in oklab, var(--primary) 9%, transparent);
+}
+.marketing-page--agency .marketing-hero {
+  border-bottom: 1px solid var(--border);
+}
+.marketing-page--groups .marketing-workflow {
+  background: radial-gradient(
+    ellipse at left,
+    color-mix(in oklab, var(--primary) 6%, transparent),
+    transparent 70%
+  );
+}
+.marketing-highlight {
+  padding-inline: 0.25rem;
+}
+.group-trip-preview {
+  min-width: 0;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 1.5rem;
+  box-shadow: -14px 14px 0 color-mix(in oklab, var(--primary) 10%, transparent);
+  transform: rotate(-1deg);
+}
+.group-trip-cover {
+  height: 10rem;
+  overflow: hidden;
+  margin-top: 1.25rem;
+  border-radius: 1rem 3rem 1rem 1rem;
+}
+.group-avatar {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 2px solid var(--card);
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #dcece5;
+  color: #173e39;
+}
+.group-avatar--1 {
+  background: #efd6ab;
+}
+.group-avatar--2 {
+  background: #c7dde9;
+}
+.group-avatar--3 {
+  background: #e8d6df;
+}
+.marketing-page--travelers .marketing-workflow ol {
+  border-left: 1px solid color-mix(in oklab, var(--primary) 20%, var(--border));
+  padding-left: 1.5rem;
+}
+.marketing-page--agency .marketing-workflow {
+  border-radius: 0.75rem;
+  background: color-mix(in oklab, var(--primary) 5%, var(--background));
+  padding: clamp(1.5rem, 4vw, 3rem);
+}
+.marketing-plan {
+  box-shadow: none;
+  border-radius: 0;
+  border-width: 1px 0 0;
+  background: transparent;
+}
+.marketing-choice {
+  position: relative;
+  overflow: hidden;
+  padding-top: 1.5rem;
+}
+.marketing-choice::before {
+  content: "";
+  display: block;
+  width: 7rem;
+  height: 0.4rem;
+  margin-left: 1.75rem;
+  border-radius: 1rem;
+  background: linear-gradient(90deg, #efd6ab, #79b8bb);
+}
+.marketing-choice--group::before {
+  background: linear-gradient(90deg, #79b8bb, #e8d6df);
+}
+.marketing-journey {
+  position: relative;
+}
+.marketing-journey > div {
+  border-top: 0;
+}
+.marketing-journey > div > div {
+  border-top: 1px solid transparent;
+  border-image: linear-gradient(90deg, transparent, color-mix(in oklab, var(--primary) 20%, var(--border)), transparent) 1;
+}
+@media (min-width: 1024px) {
+  .marketing-page--groups .marketing-hero {
+    grid-template-columns: 1fr 1.1fr;
+  }
+  .marketing-page--groups .group-trip-preview {
+    grid-row: 1;
+    grid-column: 1;
+  }
+  .marketing-page--groups .marketing-hero > div:first-child {
+    grid-column: 2;
+  }
+  .marketing-page--travelers .audience-highlights {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  .marketing-page--travelers .marketing-highlight {
+    display: grid;
+    grid-template-columns: 3rem 1fr 1.5fr;
+    align-items: center;
+    gap: 2rem;
+  }
+  .marketing-page--travelers .marketing-highlight h2,
+  .marketing-page--travelers .marketing-highlight p {
+    margin-top: 0;
+  }
+  .marketing-page--agency .audience-highlights {
+    grid-template-columns: 1.3fr 1fr 1fr;
+  }
+  .marketing-page--agency .marketing-highlight + .marketing-highlight {
+    border-left: 1px solid var(--border);
+    padding-left: 2rem;
+  }
+}
+@media (max-width: 640px) {
+  .group-trip-preview {
+    transform: none;
+    box-shadow: none;
+  }
+  .marketing-page--groups .audience-highlights {
+    gap: 0;
+  }
+  .marketing-page--groups .marketing-highlight {
+    padding-block: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .marketing-page--groups .marketing-highlight:last-child {
+    border-bottom: 0;
+  }
+}
+.marketing-editorial-card {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  border-top: 2px solid var(--border);
+}
+.marketing-editorial-card--group {
+  border-color: var(--primary);
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--primary) 7%, transparent),
+    transparent
+  );
+}
+.marketing-invitation {
+  border-radius: 50% 50% 1.5rem 1.5rem / 2.5rem 2.5rem 1.5rem 1.5rem;
+  background: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--primary) 14%, var(--background)),
+    var(--background)
+  );
+  border-bottom: 1px solid var(--border);
+}
+@media (max-width: 640px) {
+  .journey-caption p:last-child {
+    font-size: 1.4rem;
+  }
+  .journey-caption p:first-child {
+    font-size: 0.6rem;
+  }
+  .journey-note {
+    padding: 0.7rem 0.9rem;
+  }
+  .journey-studio {
+    box-shadow: 7px 7px 0 color-mix(in oklab, var(--primary) 9%, transparent);
+  }
+  .journey-group-note {
+    font-size: 0.65rem;
+    padding: 0.55rem 0.75rem;
+  }
+}
+
+/*
+ * GlobeTrotr design system — nordic expedition palette.
+ * --brand-hue is written at runtime by the white-label branding module,
+ * every accent token derives from it.
+ */
+
+@theme inline {
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  --radius: 0.75rem;
+  --brand-hue: 172;
+
+  --background: oklch(0.985 0.002 260);
+  --foreground: oklch(0.22 0.012 260);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.012 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.012 260);
+  --primary: oklch(0.52 0.115 var(--brand-hue));
+  --primary-foreground: oklch(0.99 0.01 var(--brand-hue));
+  --secondary: oklch(0.965 0.003 260);
+  --secondary-foreground: oklch(0.3 0.012 260);
+  --muted: oklch(0.955 0.003 260);
+  --muted-foreground: oklch(0.48 0.012 260);
+  --accent: oklch(0.94 0.025 var(--brand-hue));
+  --accent-foreground: oklch(0.3 0.07 var(--brand-hue));
+  --destructive: oklch(0.577 0.19 25);
+  --destructive-foreground: oklch(0.99 0.005 25);
+  --success: oklch(0.62 0.14 155);
+  --warning: oklch(0.75 0.14 75);
+  --border: oklch(0.89 0.004 260);
+  --input: oklch(0.84 0.005 260);
+  --ring: oklch(0.52 0.115 var(--brand-hue));
+  --chart-1: oklch(0.55 0.12 var(--brand-hue));
+  --chart-2: oklch(0.68 0.13 215);
+  --chart-3: oklch(0.72 0.14 75);
+  --chart-4: oklch(0.6 0.15 330);
+  --chart-5: oklch(0.62 0.14 155);
+  --sidebar: oklch(0.24 0.035 195);
+  --sidebar-foreground: oklch(0.95 0.01 190);
+  --sidebar-primary: oklch(0.65 0.13 var(--brand-hue));
+  --sidebar-primary-foreground: oklch(0.16 0.03 195);
+  --sidebar-accent: oklch(0.3 0.04 195);
+  --sidebar-accent-foreground: oklch(0.97 0.01 190);
+  --sidebar-border: oklch(0.34 0.03 195);
+  --sidebar-ring: oklch(0.65 0.13 var(--brand-hue));
+
+  --gradient-aurora: linear-gradient(
+    135deg,
+    oklch(0.99 0.003 260) 0%,
+    oklch(0.96 0.018 var(--brand-hue)) 100%
+  );
+  --gradient-sheen: linear-gradient(180deg, oklch(1 0 0) 0%, oklch(0.99 0.002 260) 100%);
+  --shadow-soft: 0 1px 2px oklch(0.22 0.01 260 / 0.05), 0 8px 24px oklch(0.22 0.01 260 / 0.05);
+  --shadow-lift: 0 20px 50px oklch(0.22 0.01 260 / 0.14);
+}
+
+.dark {
+  --background: oklch(0.17 0.012 260);
+  --foreground: oklch(0.96 0.003 260);
+  --card: oklch(0.22 0.012 260);
+  --card-foreground: oklch(0.96 0.003 260);
+  --popover: oklch(0.22 0.012 260);
+  --popover-foreground: oklch(0.96 0.003 260);
+  --primary: oklch(0.7 0.13 var(--brand-hue));
+  --primary-foreground: oklch(0.18 0.03 198);
+  --secondary: oklch(0.28 0.012 260);
+  --secondary-foreground: oklch(0.95 0.003 260);
+  --muted: oklch(0.28 0.01 260);
+  --muted-foreground: oklch(0.72 0.01 260);
+  --accent: oklch(0.32 0.05 var(--brand-hue));
+  --accent-foreground: oklch(0.95 0.02 var(--brand-hue));
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --gradient-aurora: linear-gradient(
+    135deg,
+    oklch(0.22 0.012 260) 0%,
+    oklch(0.24 0.025 var(--brand-hue)) 100%
+  );
+  --gradient-sheen: linear-gradient(180deg, oklch(0.235 0.012 260) 0%, oklch(0.2 0.01 260) 100%);
+  --shadow-soft: 0 1px 2px oklch(0 0 0 / 0.2), 0 8px 24px oklch(0 0 0 / 0.18);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+}
+
+@utility surface {
+  background: var(--gradient-sheen);
+  box-shadow: var(--shadow-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2xl);
+}
+
+/* OpenStreetMap heeft geen eigen donker thema. Deze rustige correctie houdt
+ * wegen en labels leesbaar zonder een fel vlak in de donkere interface. */
+.dark .trip-map .leaflet-tile-pane {
+  filter: brightness(0.62) contrast(1.08) saturate(0.72);
+}
+
+@utility aurora {
+  background: var(--gradient-aurora);
+  color: var(--color-foreground);
+}
+
+@utility form-control {
+  display: flex;
+  height: 2.5rem;
+  width: 100%;
+  border-radius: calc(var(--radius) - 2px);
+  border: 1px solid var(--color-input);
+  background: var(--color-card);
+  padding-inline: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-foreground);
+}
+
+/* Leaflet map skin */
+.leaflet-container {
+  font-family: var(--font-sans);
+  border-radius: var(--radius-xl);
+  z-index: 0;
+}

@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /account
+Disallow: /agency-admin
+Disallow: /corporate-admin
+
+Sitemap: https://globetrotr.nl/sitemap.xml

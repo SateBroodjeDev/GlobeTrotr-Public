@@ -1,0 +1,2 @@
+# Keep Linux deployment scripts usable when copied from Windows.
+*.sh text eol=lf

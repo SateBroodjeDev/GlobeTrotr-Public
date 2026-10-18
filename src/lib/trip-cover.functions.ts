@@ -1,0 +1,12 @@
+import { createServerFn } from "@tanstack/react-start";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireTripManagementAccess } from "@/lib/trip-management-access.server";
+
+const UUID = /^[0-9a-f-]{36}$/i;
+const SAFE_PATH = /^[0-9a-f-]{36}\/cover-[0-9]+\.(?:jpg|png|webp)$/i;
+async function db(){const{supabaseAdmin}=await import("@/integrations/supabase/client.server");return supabaseAdmin as any}
+async function canView(client:any,userId:string,tripId:string){const{data:t}=await client.from("trips").select("workspace_user_id").eq("trip_uuid",tripId).maybeSingle();if(!t)throw new Error("TRIP_NOT_FOUND");if(t.workspace_user_id===userId)return;const{data:m}=await client.from("trip_members").select("id").eq("trip_uuid",tripId).eq("user_id",userId).eq("status","active").maybeSingle();if(m)return;await requireTripManagementAccess(client,userId,tripId,"trips_view")}
+
+export const getTripCover=createServerFn({method:"GET"}).middleware([requireSupabaseAuth]).validator((x:{tripId:string})=>x).handler(async({data,context})=>{if(!UUID.test(data.tripId))throw new Error("INVALID_TRIP");const client=await db();await canView(client,context.userId,data.tripId);const{data:t,error}=await client.from("trips").select("cover_path").eq("trip_uuid",data.tripId).single();if(error||!t?.cover_path)return{path:null,url:null};const{data:signed}=await client.storage.from("trip-covers").createSignedUrl(t.cover_path,3600);return{path:t.cover_path as string,url:signed?.signedUrl??null}});
+
+export const saveTripCover=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).validator((x:{tripId:string;path:string|null})=>x).handler(async({data,context})=>{if(!UUID.test(data.tripId)||(data.path!==null&&(!SAFE_PATH.test(data.path)||!data.path.startsWith(`${data.tripId}/`))))throw new Error("INVALID_COVER");const client=await db();await requireTripManagementAccess(client,context.userId,data.tripId,"trips_plan");const{data:old,error:readError}=await client.from("trips").select("cover_path").eq("trip_uuid",data.tripId).single();if(readError)throw new Error("COVER_SAVE_FAILED");const{error}=await client.from("trips").update({cover_path:data.path}).eq("trip_uuid",data.tripId);if(error)throw new Error("COVER_SAVE_FAILED");if(old?.cover_path&&old.cover_path!==data.path)await client.storage.from("trip-covers").remove([old.cover_path]);return{ok:true}});

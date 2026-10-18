@@ -1,0 +1,2 @@
+export const TRIP_NAME_MAX_LENGTH = 30;
+export const TRIP_DESCRIPTION_MAX_LENGTH = 375;
