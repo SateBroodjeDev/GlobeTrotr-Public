@@ -1,7 +1,7 @@
 import { trackAnalyticsAction } from "@/lib/analytics";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Plus, MapPin, Wallet, Download, ArrowRight, Share2, X, Loader2, Compass, ChevronDown } from "lucide-react";
+import { Plus, Download, Share2, X, Loader2, Compass, CalendarRange, GitCompareArrows, FileJson } from "lucide-react";
 import { toast } from "sonner";
 import { uid, useWorkspace } from "@/lib/workspace";
 import { canEdit, countsTowardsTripLimit, ownsTrip, planOf } from "@/lib/plans";
@@ -11,24 +11,19 @@ import {
   tripStatus,
   type TripStatus,
   type TripTemplate,
-  type Trip,
   type Stop,
 } from "@/lib/types";
 import { convert, formatMoney } from "@/lib/services";
 import { downloadJson } from "@/lib/exporters";
-import { DeleteTripButton } from "@/components/DeleteTripButton";
-import { Countdown } from "@/components/Countdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { Card, CardContent } from "@/components/ui/card";
 import { useLocale } from "@/lib/locale";
-import { localizeTagline } from "@/lib/localized-values";
+
 import { TRIP_NAME_MAX_LENGTH } from "@/lib/trip-limits";
 import { TripComparison } from "@/components/TripComparison";
-import { TripCover } from "@/components/TripCover";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { TripOverviewCard } from "@/components/TripOverviewCard";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { calculateYearStatistics } from "@/lib/trip-statistics";
 import { Label } from "@/components/ui/label";
 import { countryFlag, countryLabel, countryOptions } from "@/lib/countries";
@@ -54,7 +49,7 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 });
 
 function TripsOverview() {
-  const { state, addTrip, saveTripNow, removeTrip, rates } = useWorkspace();
+  const { state, addTrip, saveTripNow, removeTrip, rates, cloud } = useWorkspace();
   const { locale, text } = useLocale();
   const navigate = useNavigate();
   const plan = planOf(state.plan);
@@ -64,7 +59,10 @@ function TripsOverview() {
   const [filter, setFilter] = useState<TripStatus | "all">("all");
   const [compareLeft, setCompareLeft] = useState("");
   const [compareRight, setCompareRight] = useState("");
+  const comparisonLeft = state.trips.find((trip) => trip.id === compareLeft);
+  const comparisonRight = state.trips.find((trip) => trip.id === compareRight);
   const [createOpen, setCreateOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [country, setCountry] = useState("");
@@ -191,80 +189,39 @@ function TripsOverview() {
 
   return (
     <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-    <div className="space-y-5 sm:space-y-6">
-      <section className="aurora relative overflow-hidden rounded-2xl border border-border/60">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-5 py-5 sm:px-6">
-            <p className="col-span-2 mb-1 text-xs text-muted-foreground">{localizeTagline(state.branding.tagline, locale)}</p>
-            <h1 className="min-w-0 font-display text-2xl font-semibold tracking-tight sm:text-3xl">{text("Jouw reizen", "Your trips")}</h1>
-          <DialogTrigger asChild>
-            <Button size="sm" className="shrink-0" disabled={!editable || atLimit}>
-              <Plus className="size-4" />{text("Nieuwe reis", "New trip")}
-            </Button>
-          </DialogTrigger>
-            <p className="col-span-2 mt-1 text-xs text-muted-foreground sm:text-sm">
-              {text(`${activeTripCount} actieve reizen`, `${activeTripCount} active trips`)}
-              <span className="mx-2 opacity-50" aria-hidden="true">·</span>
-              {formatMoney(grand, base)} {text("geboekte uitgaven", "recorded expenses")}
-            </p>
+    <div className="space-y-4 sm:space-y-5">
+      <header className="flex flex-wrap items-center justify-between gap-3" data-trips-heading>
+        <div className="min-w-0"><h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">{text("Jouw reizen", "Your trips")}</h1>
+          <p className="mt-1 text-xs text-muted-foreground sm:text-sm">{text(`${activeTripCount} actieve reizen`, `${activeTripCount} active trips`)} <span className="mx-1.5" aria-hidden="true">·</span> {formatMoney(grand, base)} {text("geboekte uitgaven", "recorded expenses")}</p>
         </div>
-        {focusTrip && <div className="flex flex-wrap items-center gap-3 border-t border-border/50 bg-background/20 px-5 py-4 sm:gap-4 sm:px-6">
-          <div className="hidden size-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary sm:flex" aria-hidden="true"><Compass className="size-5" /></div>
-          <div className="min-w-0 flex-1">
-            <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-primary">{currentTrip ? text("Nu onderweg", "Travelling now") : text("Eerstvolgende reis", "Next trip")}</p>
-            <h2 className="break-anywhere font-display text-lg font-semibold leading-snug">{focusTrip.name}</h2>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              <span>{shortDate(focusTrip.start)} – {shortDate(focusTrip.end)}</span>
-              <span>{focusTrip.stops.length} {text("bestemmingen", "destinations")}</span>
-              {!currentTrip && <Countdown date={focusTrip.start} compact />}
-            </div>
-          </div>
-          <Button asChild size="sm" variant="outline" className="shrink-0 border-primary/25 bg-background/60 hover:bg-primary/10">
-            <Link to="/trips/$tripId" params={{ tripId: focusTrip.id }}>
-              {currentTrip ? text("Bekijk vandaag", "View today") : text("Open reis", "Open trip")}
-              <ArrowRight className="size-4" />
-            </Link>
-          </Button>
-        </div>}
-        {yearStats.trips > 0 && <details className="group border-t border-border/50">
-          <summary className="flex min-h-12 cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3 text-xs transition-colors hover:bg-background/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-6 [&::-webkit-details-marker]:hidden">
-            <span className="font-medium">{text(`Reisjaar ${year}`, `Travel year ${year}`)}</span>
-            <span className="text-muted-foreground">{yearStats.countries} {text("landen", "countries")} <span className="mx-1 opacity-50" aria-hidden="true">·</span> {yearStats.tripDays} {text("reisdagen", "travel days")}</span>
-            <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
-          </summary>
-          <div className="px-5 pb-5 sm:px-6">
-            <dl className="grid grid-cols-2 gap-x-5 gap-y-4 rounded-xl border border-border/50 bg-background/30 p-4 sm:grid-cols-5">
-              {[[text("Reizen", "Trips"), yearStats.trips], [text("Landen", "Countries"), yearStats.countries], [text("Plaatsen", "Places"), yearStats.places], [text("Reisdagen", "Travel days"), yearStats.tripDays], [text("Uitgaven", "Expenses"), formatMoney(yearStats.spent, base)]].map(([label, value]) => <div key={String(label)} className="min-w-0"><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 break-words text-lg font-semibold tabular-nums">{value}</dd></div>)}
-            </dl>
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">{text("Gebaseerd op je reizen en vastgelegde uitgaven.", "Based on your trips and recorded expenses.")}</p>
-              <Button type="button" size="sm" variant="ghost" onClick={shareYear}><Share2 className="size-3.5" />{text("Reisjaar delen", "Share travel year")}</Button>
-            </div>
-          </div>
-        </details>}
-      </section>
+        <DialogTrigger asChild><Button className="min-h-11 shrink-0" disabled={!editable || atLimit}><Plus className="size-4"/>{text("Nieuwe reis", "New trip")}</Button></DialogTrigger>
+      </header>
 
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader><DialogTitle>{text("Nieuwe reis aanmaken", "Create a new trip")}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{text("Nieuwe reis aanmaken", "Create a new trip")}</DialogTitle>
+            <DialogDescription>{text("Geef je reis een naam, kies de datums en voeg minimaal één land toe.", "Name your trip, choose the dates and add at least one country.")}</DialogDescription>
+          </DialogHeader>
           <div className="space-y-4">
-          <label className="space-y-1.5 text-sm">
+          <div className="space-y-2 text-sm">
             <Label htmlFor="new-trip-name">{text("Reisnaam", "Trip name")}</Label>
-            <Input id="new-trip-name" value={name} maxLength={TRIP_NAME_MAX_LENGTH} disabled={!editable || creating} onChange={(e) => setName(e.target.value)} placeholder={text("Bijv. Namibië familie-safari", "For example, Namibia family safari")} />
-          </label>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="space-y-1.5 text-sm"><Label htmlFor="new-trip-start">{text("Begindatum", "Start date")}</Label><Input id="new-trip-start" type="date" value={startDate} disabled={creating} onChange={(event) => { const value=event.target.value; setStartDate(value); if(!endDate || endDate<value)setEndDate(value); }} /></label>
-            <label className="space-y-1.5 text-sm"><Label htmlFor="new-trip-end">{text("Einddatum", "End date")}</Label><Input id="new-trip-end" type="date" min={startDate || undefined} value={endDate} disabled={creating} onChange={(event) => setEndDate(event.target.value)} /></label>
+            <Input id="new-trip-name" aria-required="true" value={name} maxLength={TRIP_NAME_MAX_LENGTH} disabled={!editable || creating} onChange={(e) => setName(e.target.value)} placeholder={text("Bijv. Namibië familie-safari", "For example, Namibia family safari")} />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2 text-sm"><Label htmlFor="new-trip-start">{text("Begindatum", "Start date")}</Label><Input id="new-trip-start" aria-required="true" type="date" value={startDate} disabled={creating} onChange={(event) => { const value=event.target.value; setStartDate(value); if(!endDate || endDate<value)setEndDate(value); }} /></div>
+            <div className="space-y-2 text-sm"><Label htmlFor="new-trip-end">{text("Einddatum", "End date")}</Label><Input id="new-trip-end" aria-required="true" type="date" min={startDate || undefined} value={endDate} disabled={creating} onChange={(event) => setEndDate(event.target.value)} /></div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="new-trip-country">{text("Landen", "Countries")}</Label>
             <div className="flex gap-2">
-              <select id="new-trip-country" className="h-10 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm" value={country} disabled={creating || countries.length >= 8} onChange={(event) => setCountry(event.target.value)}>
+              <select id="new-trip-country" aria-describedby="new-trip-country-help" className="h-10 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" value={country} disabled={creating || countries.length >= 8} onChange={(event) => setCountry(event.target.value)}>
                 <option value="">{text("Kies een land", "Choose a country")}</option>
                 {countryOptions(locale).filter((option) => !countries.includes(option.code)).map((option) => <option key={option.code} value={option.code}>{option.label} {option.flag}</option>)}
               </select>
               <Button type="button" variant="outline" disabled={!country || creating} onClick={() => { setCountries((current) => [...current, country]); setCountry(""); }}>{text("Toevoegen", "Add")}</Button>
             </div>
-            {countries.length > 0 && <div className="flex flex-wrap gap-2">{countries.map((code) => <span key={code} className="inline-flex items-center gap-1 rounded-full border bg-muted/40 px-2.5 py-1 text-sm"><span aria-hidden>{countryFlag(code)}</span>{countryLabel(code, locale)}<button type="button" disabled={creating} onClick={() => setCountries((current) => current.filter((item) => item !== code))} aria-label={text(`${countryLabel(code, locale)} verwijderen`, `Remove ${countryLabel(code, locale)}`)}><X className="size-3.5" /></button></span>)}</div>}
-            <p className="text-xs text-muted-foreground">{text("Maximaal 8 landen. Ze worden als eerste routepunten toegevoegd; steden en tussenstops voeg je daarna op de routekaart toe.", "Up to 8 countries. They are added as the first route points; add cities and intermediate stops later on the route map.")}</p>
+            {countries.length > 0 && <div className="flex flex-wrap gap-2">{countries.map((code) => <span key={code} className="inline-flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 pl-2.5 pr-1 text-sm"><span aria-hidden>{countryFlag(code)}</span>{countryLabel(code, locale)}<button type="button" className="inline-flex size-8 items-center justify-center rounded-full hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" disabled={creating} onClick={() => setCountries((current) => current.filter((item) => item !== code))} aria-label={text(`${countryLabel(code, locale)} verwijderen`, `Remove ${countryLabel(code, locale)}`)}><X className="size-3.5" /></button></span>)}</div>}
+            <p id="new-trip-country-help" className="text-xs leading-relaxed text-muted-foreground">{text("Maximaal 8 landen. Ze worden als eerste routepunten toegevoegd; steden en tussenstops voeg je daarna op de routekaart toe.", "Up to 8 countries. They are added as the first route points; add cities and intermediate stops later on the route map.")}</p>
           </div>
           <div className="space-y-2"><Label>{text("Soort reis", "Trip type")}</Label>
           <div className="flex flex-wrap gap-2">
@@ -272,9 +229,10 @@ function TripsOverview() {
               <button
                 key={t.id}
                 type="button"
+                aria-pressed={template === t.id}
                 disabled={creating}
                 onClick={() => setTemplate(t.id)}
-                className={`rounded-xl border px-3 py-2 text-sm transition-colors ${
+                className={`min-h-11 rounded-xl border px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                   template === t.id
                     ? "border-primary bg-accent text-accent-foreground"
                     : "border-border hover:bg-muted"
@@ -286,7 +244,7 @@ function TripsOverview() {
             ))}
           </div>
           </div>
-          <Button className="w-full" onClick={() => void create()} disabled={!editable || atLimit || creating}>
+          <Button className="min-h-11 w-full" aria-busy={creating} onClick={() => void create()} disabled={!editable || atLimit || creating}>
             {creating ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />} {creating ? text("Reis voorbereiden…", "Preparing trip…") : text("Reis aanmaken", "Create trip")}
           </Button>
           </div>
@@ -298,14 +256,14 @@ function TripsOverview() {
       </p>}
 
       <div className="flex items-center gap-3">
-        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div role="group" aria-label={text("Reizen filteren", "Filter trips")} className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {(["all", "current", "upcoming", "archived"] as const).map((f) => (
           <button
             key={f}
             type="button"
             aria-pressed={filter === f}
             onClick={() => setFilter(f)}
-            className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm transition-colors ${
+            className={`min-h-10 shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               filter === f
                 ? "border-primary bg-accent text-accent-foreground"
                 : "border-border hover:bg-muted"
@@ -317,86 +275,92 @@ function TripsOverview() {
           </button>
         ))}
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="shrink-0"
-          aria-label={text("Alle reizen als JSON downloaden", "Download all trips as JSON")}
-          title={text("Alle reizen als JSON downloaden", "Download all trips as JSON")}
-          onClick={() => {
-            downloadJson(state, state.branding.brandName);
-            toast.success(text("Back-up gedownload", "Backup downloaded"));
-          }}
-        >
-          <Download className="size-4" /><span className="hidden sm:inline">{text("Alle reizen", "All trips")} · JSON</span>
-        </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {visible.map((trip) => {
-          const spent = totals.find((t) => t.id === trip.id)!.spent;
-          const pct = trip.budget ? Math.min(100, (spent / trip.budget) * 100) : 0;
-          const tpl = TEMPLATES.find((t) => t.id === trip.template);
-          return (
-            <Card key={trip.id} className="surface flex flex-col">
-              <div className="overflow-hidden rounded-t-xl"><TripCover tripId={trip.id} editable={false} text={text} compact/></div>
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-2">
-                  <CardTitle className="min-w-0 break-anywhere text-base">
-                    <Link
-                      to="/trips/$tripId"
-                      params={{ tripId: trip.id }}
-                      className="hover:underline"
-                    >
-                      {tpl?.emoji} {trip.name}
-                    </Link>
-                  </CardTitle>
-                  {ownsTrip(trip.accessRole) && (
-                    <DeleteTripButton tripName={trip.name} iconOnly onDelete={() => removeTrip(trip.id)} />
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <Badge variant="secondary">{statusLabel(tripStatus(trip), text)}</Badge>
-                  {!ownsTrip(trip.accessRole) && (
-                    <Badge variant="outline">{text("Gedeeld", "Shared")}</Badge>
-                  )}
-                  {trip.start} → {trip.end}
-                  {tripStatus(trip) === "upcoming" && <Countdown date={trip.start} compact />}
-                </div>
-              </CardHeader>
-              <CardContent className="mt-auto space-y-3">
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <MapPin className="size-4" /> {trip.stops.length}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Wallet className="size-4" /> {trip.expenses.length}
-                  </span>
-                </div>
-                <Progress value={pct} />
-                <p className="text-sm">
-                  <span className="font-semibold">{formatMoney(spent, base)}</span>{" "}
-                  <span className="text-muted-foreground">
-                    {text("van", "of")} {formatMoney(trip.budget, base)}
-                  </span>
-                </p>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {state.trips.length >= 2 && <Card className="surface"><CardHeader className="pb-3"><CardTitle className="text-base">{text("Vergelijk twee reisvarianten", "Compare two trip variants")}</CardTitle></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2"><label className="space-y-1 text-sm"><span className="text-muted-foreground">{text("Eerste reis", "First trip")}</span><select className="h-10 w-full rounded-md border bg-background px-3" value={compareLeft} onChange={(event) => setCompareLeft(event.target.value)}><option value="">{text("Kies een reis", "Choose a trip")}</option>{state.trips.filter((trip) => trip.id !== compareRight).map((trip) => <option key={trip.id} value={trip.id}>{trip.name}</option>)}</select></label><label className="space-y-1 text-sm"><span className="text-muted-foreground">{text("Tweede reis", "Second trip")}</span><select className="h-10 w-full rounded-md border bg-background px-3" value={compareRight} onChange={(event) => setCompareRight(event.target.value)}><option value="">{text("Kies een reis", "Choose a trip")}</option>{state.trips.filter((trip) => trip.id !== compareLeft).map((trip) => <option key={trip.id} value={trip.id}>{trip.name}</option>)}</select></label></CardContent></Card>}
-
-      {compareLeft && compareRight && (
-        <TripComparison
-          left={state.trips.find((trip) => trip.id === compareLeft)!}
-          right={state.trips.find((trip) => trip.id === compareRight)!}
-          base={base}
-          rates={rates}
-          text={text}
-        />
+      {visible.length === 0 && (
+        <Card className="surface">
+          <CardContent className="flex flex-col items-center gap-3 px-6 py-8 text-center sm:py-10">
+            {cloud === "loading" ? (
+              <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" aria-hidden="true" />{text("Reizen laden…", "Loading trips…")}</p>
+            ) : (
+              <>
+                <Compass className="size-7 text-primary" aria-hidden="true" />
+                <h2 className="font-display text-lg font-semibold">{state.trips.length === 0 ? text("Je eerste reis begint hier", "Your first trip starts here") : text("Geen reizen in deze selectie", "No trips in this view")}</h2>
+                <p className="max-w-md text-sm leading-relaxed text-muted-foreground">{state.trips.length === 0 ? (editable ? text("Maak een reis aan en breng je route, boekingen en kosten samen.", "Create a trip to bring your route, bookings and expenses together.") : text("Er zijn nog geen reizen beschikbaar voor je account.", "There are no trips available for your account yet.")) : text("Kies een ander filter om je overige reizen te bekijken.", "Choose another filter to see your other trips.")}</p>
+                {state.trips.length > 0 ? <Button variant="outline" className="mt-1 min-h-11" onClick={() => setFilter("all")}>{text("Alle reizen bekijken", "View all trips")}</Button> : editable && !atLimit && <Button className="mt-1 min-h-11" onClick={() => setCreateOpen(true)}><Plus className="size-4" />{text("Nieuwe reis", "New trip")}</Button>}
+              </>
+            )}
+          </CardContent>
+        </Card>
       )}
+
+      <div className={`grid gap-4 ${visible.length === 1 ? "grid-cols-1" : visible.length === 2 ? "md:grid-cols-2" : "md:grid-cols-2 xl:grid-cols-3"}`} aria-busy={cloud === "loading"} data-trips-grid>
+        {visible.map(trip => <TripOverviewCard key={trip.id} trip={trip} spent={totals.find(item => item.id === trip.id)!.spent}
+          base={base} text={text} dateLabel={`${shortDate(trip.start)} – ${shortDate(trip.end)}`}
+          wide={visible.length === 1} priority={focusTrip?.id === trip.id ? currentTrip ? text("Nu onderweg", "Travelling now") : text("Eerstvolgende reis", "Next trip") : undefined}
+          onDelete={() => removeTrip(trip.id)}/>) }
+      </div>
+
+      <div role="group" aria-label={text("Reisoverzichten en export", "Travel summaries and export")}
+        className="flex flex-wrap items-center gap-2 pt-1">
+        {yearStats.trips > 0 && <Dialog>
+          <DialogTrigger asChild><Button type="button" variant="outline" className="min-h-11 gap-2 bg-transparent px-3 text-xs sm:px-4 sm:text-sm">
+            <CalendarRange className="size-4 text-primary" aria-hidden="true"/>{text(`Reisjaar ${year}`, `Travel year ${year}`)}
+          </Button></DialogTrigger>
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader><DialogTitle>{text(`Jouw reisjaar ${year}`, `Your travel year ${year}`)}</DialogTitle>
+              <DialogDescription>{text("Je reizen en vastgelegde uitgaven van dit jaar bij elkaar.", "Your trips and recorded expenses for this year in one place.")}</DialogDescription>
+            </DialogHeader>
+            <dl className="grid grid-cols-2 gap-x-5 gap-y-5 py-2 sm:grid-cols-3">
+              {[[text("Reizen", "Trips"), yearStats.trips], [text("Landen", "Countries"), yearStats.countries], [text("Plaatsen", "Places"), yearStats.places], [text("Reisdagen", "Travel days"), yearStats.tripDays], [text("Uitgaven", "Expenses"), formatMoney(yearStats.spent, base)]].map(([label, value]) => <div key={String(label)} className="min-w-0"><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 break-words text-2xl font-semibold tabular-nums">{value}</dd></div>)}
+            </dl>
+            <div className="flex justify-end border-t pt-4">
+              <Button type="button" variant="outline" onClick={shareYear}><Share2 className="size-4" aria-hidden="true"/>{text("Reisjaar delen", "Share travel year")}</Button>
+            </div>
+          </DialogContent>
+        </Dialog>}
+
+        {state.trips.length >= 2 && <Dialog>
+          <DialogTrigger asChild><Button type="button" variant="outline" className="min-h-11 gap-2 bg-transparent px-3 text-xs sm:px-4 sm:text-sm"
+            aria-label={text("Reizen vergelijken", "Compare trips")} title={text("Reizen vergelijken", "Compare trips")}>
+            <GitCompareArrows className="size-4 text-primary" aria-hidden="true"/>{text("Vergelijken", "Compare")}
+          </Button></DialogTrigger>
+          <DialogContent className="sm:max-w-4xl">
+            <DialogHeader><DialogTitle>{text("Reisvarianten vergelijken", "Compare trip variants")}</DialogTitle>
+              <DialogDescription>{text("Kies twee reizen om routes, boekingen en kosten naast elkaar te bekijken.", "Choose two trips to compare routes, bookings and costs.")}</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-sm"><span className="text-muted-foreground">{text("Eerste reis", "First trip")}</span><select className="h-11 w-full min-w-0 rounded-md border bg-background px-3" value={compareLeft} onChange={(event) => setCompareLeft(event.target.value)}><option value="">{text("Kies een reis", "Choose a trip")}</option>{state.trips.filter((trip) => trip.id !== compareRight).map((trip) => <option key={trip.id} value={trip.id}>{trip.name}</option>)}</select></label>
+              <label className="space-y-1 text-sm"><span className="text-muted-foreground">{text("Tweede reis", "Second trip")}</span><select className="h-11 w-full min-w-0 rounded-md border bg-background px-3" value={compareRight} onChange={(event) => setCompareRight(event.target.value)}><option value="">{text("Kies een reis", "Choose a trip")}</option>{state.trips.filter((trip) => trip.id !== compareLeft).map((trip) => <option key={trip.id} value={trip.id}>{trip.name}</option>)}</select></label>
+            </div>
+            {comparisonLeft && comparisonRight && <div className="min-w-0"><TripComparison
+              left={comparisonLeft}
+              right={comparisonRight}
+              base={base} rates={rates} text={text}/></div>}
+          </DialogContent>
+        </Dialog>}
+
+        <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+          <DialogTrigger asChild><Button type="button" variant="outline" className="min-h-11 gap-2 bg-transparent px-3 text-xs sm:px-4 sm:text-sm">
+            <Download className="size-4 text-primary" aria-hidden="true"/>{text("Exporteren", "Export")}
+          </Button></DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>{text("Reizen exporteren", "Export trips")}</DialogTitle>
+              <DialogDescription>{text("Download je reizen en instellingen als eigen back-up.", "Download your trips and settings as a personal backup.")}</DialogDescription>
+            </DialogHeader>
+            <div className="flex items-center gap-3 rounded-lg bg-muted/40 p-4">
+              <FileJson className="size-6 shrink-0 text-primary" aria-hidden="true"/>
+              <div className="min-w-0"><p className="text-sm font-medium">{text("Reizen en instellingen", "Trips and settings")}</p>
+                <p className="text-xs text-muted-foreground">{text(`${state.trips.length} ${state.trips.length === 1 ? "reis" : "reizen"} · JSON-bestand`, `${state.trips.length} ${state.trips.length === 1 ? "trip" : "trips"} · JSON file`)}</p></div>
+            </div>
+            <Button type="button" onClick={() => {
+              downloadJson(state, state.branding.brandName);
+              toast.success(text("Back-up gedownload", "Backup downloaded"));
+              setExportOpen(false);
+            }}><Download className="size-4" aria-hidden="true"/>{text("Back-up downloaden", "Download backup")}</Button>
+          </DialogContent>
+        </Dialog>
+      </div>
 
     </div>
     </Dialog>

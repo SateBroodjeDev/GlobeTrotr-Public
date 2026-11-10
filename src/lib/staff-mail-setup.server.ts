@@ -1,4 +1,5 @@
 import { createHash, createPublicKey, randomBytes, verify } from "node:crypto";
+import { MAIL_IMPORT_PERMISSIONS } from "../../worker/mail-import-permissions.mjs";
 import type { MailSetupPhase } from "./staff-mail-setup-diagnostics";
 
 export const MAIL_SETUP_CALLBACK = "https://portal.globetrotr.nl/api/staff-mail-callback";
@@ -152,24 +153,7 @@ export async function verifyMailSetupToken(
 
 // Limited to the IMAP importer and existing audited mail-cleanup jobs for this
 // own mailbox. No SMTP, account administration or inherited future privileges.
-export const MAIL_IMPORT_PERMISSIONS = [
-  "authenticate",
-  "imapAuthenticate",
-  "imapList",
-  "imapLsub",
-  "imapStatus",
-  "imapSelect",
-  "imapExamine",
-  "imapSearch",
-  "imapFetch",
-  "imapStore",
-  "imapExpunge",
-  "imapIdle",
-  "imapNamespace",
-  "imapId",
-  "imapCapability",
-  "imapEnable",
-];
+export { MAIL_IMPORT_PERMISSIONS } from "../../worker/mail-import-permissions.mjs";
 
 export async function createMailImportCredential(
   accessToken: string,

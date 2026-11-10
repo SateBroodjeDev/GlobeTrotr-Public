@@ -1,3 +1,21 @@
+import { agencyHostLookup } from "./agency-domain.ts";
+
+/** Carry Agency scope through the already permitted central Auth callback.
+ * The mail hook verifies the saved hostname and membership before issuing mail.
+ */
+export function agencyAuthEmailRedirect(origin: string) {
+  const url = new URL(origin);
+  if (url.protocol !== "https:" || !agencyHostLookup(url.hostname)) return null;
+  const callback = new URL("https://portal.globetrotr.nl/oauth-callback");
+  callback.searchParams.set("agency_email_host", url.hostname.toLowerCase());
+  return callback.toString();
+}
+
+export function isPrivateAgencyEmailRejection(error: { code?: string; message?: string } | null) {
+  return Boolean(error && (["otp_disabled", "user_not_found", "user_banned"].includes(error.code || "")
+    || /signups not allowed for otp/i.test(error.message || "")));
+}
+
 export function authEmailType(value: unknown) {
   return value === "recovery" ||
     value === "magiclink" ||

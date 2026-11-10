@@ -1,3 +1,6 @@
+import { Parser } from "htmlparser2";
+import { GLOBETROTR_SLOGAN } from "./branding.ts";
+
 const allowedSimpleTags = new Set(["p", "br", "strong", "b", "em", "i", "u", "ul", "ol", "li"]);
 
 function safeHref(value: string) {
@@ -15,34 +18,34 @@ function escapeAttribute(value: string) {
 
 /** Keeps only the formatting subset offered by the company-mail editor. */
 export function sanitizeMailHtml(input: string) {
-  return input
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1\s*>/gi, "")
-    .split(/(<[^>]*>)/g)
-    .map((token) => {
-      if (!token.startsWith("<")) return token;
-      const closing = token.match(/^<\s*\/\s*([a-z0-9]+)\s*>$/i);
-      if (closing) {
-        const tag = closing[1].toLowerCase();
-        if (tag === "div") return "</p>";
-        return allowedSimpleTags.has(tag) || tag === "a" ? `</${tag}>` : "";
-      }
-      const opening = token.match(/^<\s*([a-z0-9]+)([\s\S]*?)>$/i);
-      if (!opening) return "";
-      const tag = opening[1].toLowerCase();
-      // contentEditable uses divs for new paragraphs in several browsers.
-      // Store those as the safe paragraph element supported by the mail editor.
-      if (tag === "div") return "<p>";
-      if (allowedSimpleTags.has(tag)) return tag === "br" ? "<br>" : `<${tag}>`;
-      if (tag !== "a") return "";
-      const hrefMatch = opening[2].match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
-      const href = safeHref(hrefMatch?.[1] ?? hrefMatch?.[2] ?? hrefMatch?.[3] ?? "");
-      return href
-        ? `<a href="${escapeAttribute(href)}" target="_blank" rel="noopener noreferrer">`
-        : "<a>";
-    })
-    .join("")
-    .trim();
+  const output: string[] = [];
+  const stack: string[] = [];
+  let suppressed = 0;
+  const parser = new Parser({
+    onopentag(name, attributes) {
+      if (name === "script" || name === "style") { suppressed++; return; }
+      if (suppressed) return;
+      const tag = name === "div" ? "p" : name;
+      if (!allowedSimpleTags.has(tag) && tag !== "a") return;
+      if (tag === "a") {
+        const href = safeHref(attributes.href ?? "");
+        output.push(href ? `<a href="${escapeAttribute(href)}" target="_blank" rel="noopener noreferrer">` : "<a>");
+      } else output.push(`<${tag}>`);
+      if (tag !== "br") stack.push(tag);
+    },
+    ontext(text) { if (!suppressed) output.push(escapeAttribute(text)); },
+    onclosetag(name) {
+      if (name === "script" || name === "style") { suppressed = Math.max(0, suppressed - 1); return; }
+      if (suppressed) return;
+      const tag = name === "div" ? "p" : name;
+      const index = stack.lastIndexOf(tag);
+      if (index < 0) return;
+      while (stack.length > index) output.push(`</${stack.pop()}>`);
+    },
+  }, { decodeEntities: true });
+  parser.end(input);
+  while (stack.length) output.push(`</${stack.pop()}>`);
+  return output.join("").trim();
 }
 
 export function plainTextToMailHtml(input: string) {
@@ -79,6 +82,8 @@ export function mailHtmlForDisplay(bodyHtml?: string | null, bodyText?: string |
 
 const signatureBoilerplate = [
   /^globetrotr$/i,
+  /^Your whole trip, planned together in one place\.$/i,
+  /^Jullie hele rondreis, samen geregeld op één plek\.$/i,
   /^plan every trip\. track every euro\.$/i,
   /^plan je reis \/ plan your trip:/i,
   /^contact:/i,
@@ -102,7 +107,7 @@ export function corporateSignatureHtml(input: { signatureText: string; displayNa
   const details = personalSignatureLines(input.signatureText, input.displayName)
     .map((line) => escapeAttribute(line))
     .join("<br>");
-  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:28px;border-top:1px solid #dfe9e6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif"><tr><td style="padding-top:20px"><table role="presentation" cellspacing="0" cellpadding="0"><tr><td width="62" valign="top" style="padding-right:14px"><img src="https://globetrotr.nl/assets/email/logo.png" width="52" height="52" alt="GlobeTrotr" style="display:block;border:0;border-radius:14px"></td><td valign="top"><div style="font-size:16px;line-height:22px;font-weight:700;color:#102039">${name}</div>${details ? `<div style="margin-top:2px;font-size:13px;line-height:19px;color:#5f6f78">${details}</div>` : ""}<div style="margin-top:7px;font-size:13px;line-height:19px;font-weight:700;color:#168b78">GlobeTrotr</div><div style="font-size:12px;line-height:18px;color:#748078">Plan every trip. Track every euro.</div><div style="margin-top:8px;font-size:12px;line-height:19px"><a href="mailto:${address}" style="color:#36515b;text-decoration:none">${address}</a><span style="color:#b2bfba"> &nbsp;·&nbsp; </span><a href="https://globetrotr.nl" style="color:#168b78;text-decoration:none;font-weight:600">globetrotr.nl</a></div><div style="margin-top:10px;font-size:12px"><a href="https://globetrotr.nl/contact" style="color:#526a72;text-decoration:underline">Contact</a></div></td></tr></table></td></tr></table>`;
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:28px;border-top:1px solid #dfe9e6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif"><tr><td style="padding-top:20px"><table role="presentation" cellspacing="0" cellpadding="0"><tr><td width="62" valign="top" style="padding-right:14px"><img src="https://globetrotr.nl/assets/email/logo.png?v=20261019" width="52" height="52" alt="GlobeTrotr" style="display:block;border:0;border-radius:14px"></td><td valign="top"><div style="font-size:16px;line-height:22px;font-weight:700;color:#102039">${name}</div>${details ? `<div style="margin-top:2px;font-size:13px;line-height:19px;color:#5f6f78">${details}</div>` : ""}<div style="margin-top:7px;font-size:13px;line-height:19px;font-weight:700;color:#117A65">GlobeTrotr</div><div style="font-size:12px;line-height:18px;color:#748078">${GLOBETROTR_SLOGAN.en}</div><div style="margin-top:8px;font-size:12px;line-height:19px"><a href="mailto:${address}" style="color:#36515b;text-decoration:none">${address}</a><span style="color:#b2bfba"> &nbsp;·&nbsp; </span><a href="https://globetrotr.nl" style="color:#117A65;text-decoration:none;font-weight:600">globetrotr.nl</a></div><div style="margin-top:10px;font-size:12px"><a href="https://globetrotr.nl/contact" style="color:#526a72;text-decoration:underline">Contact</a></div></td></tr></table></td></tr></table>`;
 }
 
 export function corporateSignatureText(input: { signatureText: string; displayName: string; address: string }) {
@@ -111,7 +116,7 @@ export function corporateSignatureText(input: { signatureText: string; displayNa
     input.displayName.trim() || "GlobeTrotr",
     ...details,
     "GlobeTrotr",
-    "Plan every trip. Track every euro.",
+    GLOBETROTR_SLOGAN.en,
     input.address.trim(),
     "https://globetrotr.nl",
     "Contact: https://globetrotr.nl/contact",

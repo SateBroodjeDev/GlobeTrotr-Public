@@ -21,13 +21,15 @@ export type EffectiveTripAccess = {
   agencyPermissions?: AgencyPermissionMap;
 };
 
-/** Een actief Agency-lidmaatschap met kijkrecht gaat voor een oude per-reisrol. */
+/** Actieve Agency-beperkingen gaan voor een afzonderlijke reisrol; eigenaar blijft bevoegd. */
 export function resolveEffectiveTripAccess(
   tripRole: TripMemberRole | null,
   agencyRole: "advisor" | "finance" | null,
   agencyPermissions?: AgencyPermissionMap,
 ): EffectiveTripAccess | null {
-  if (agencyRole && agencyPermissions?.trips_view) {
+  if (tripRole === "owner") return { role: "owner" };
+  if (agencyRole) {
+    if (!agencyPermissions?.trips_view) return null;
     return { role: agencyRole, agencyPermissions };
   }
   return tripRole ? { role: tripRole } : null;

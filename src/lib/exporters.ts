@@ -63,7 +63,7 @@ function safeFileName(value: string) {
 function icsText(value: string) {
   return value
     .replace(/\\/g, "\\\\")
-    .replace(/\r?\n/g, "\\n")
+    .replace(/\r\n|\r|\n/g, "\\n")
     .replace(/,/g, "\\,")
     .replace(/;/g, "\\;");
 }
@@ -122,7 +122,7 @@ export function buildTripCalendar(trip: Trip) {
       endDate: item.endDate ?? item.date,
       startTime: item.details?.startTime ?? "",
       endTime: item.details?.endTime ?? "",
-      location: item.location?.name ?? item.departure?.name ?? item.arrival?.name ?? "",
+      location: [item.location ?? item.departure ?? item.arrival].filter(Boolean).map(place => [place!.name,place!.addressLine,place!.city,place!.country].filter(Boolean).join(", ")).join(""),
       allDay: item.type === "lodging" || item.type === "car_rental",
     })),
   ].filter((item) => /^\d{4}-\d{2}-\d{2}$/.test(item.date));
@@ -135,7 +135,7 @@ export function buildTripCalendar(trip: Trip) {
   ];
   for (const event of events) {
     const timed = !event.allDay && /^\d{2}:\d{2}$/.test(event.startTime);
-    lines.push("BEGIN:VEVENT", `UID:${event.id}@globetrotr.nl`, `DTSTAMP:${stamp}`);
+    lines.push("BEGIN:VEVENT", `UID:${icsText(String(event.id))}@globetrotr.nl`, `DTSTAMP:${stamp}`);
     if (timed) {
       lines.push(`DTSTART:${icsDate(event.date)}T${event.startTime.replace(":", "")}00`);
       if (/^\d{2}:\d{2}$/.test(event.endTime))
@@ -193,13 +193,25 @@ export function gpxRouteStops(trip: Trip) {
 }
 
 export function buildTripGpx(trip: Trip) {
-  const points = gpxRouteStops(trip)
+  const stops = gpxRouteStops(trip);
+  const key = (point: {lat:number;lon:number}) => `${Number(point.lat)},${Number(point.lon)}`;
+  const waypoints = new Map<string, {lat:number;lon:number;name:string;details:Set<string>}>();
+  for (const item of trip.travelItems ?? []) {
+    const place = item.location;
+    if (isRoutePlanningItem(item) || !place || typeof place.lat !== "number" || typeof place.lon !== "number" || !Number.isFinite(place.lat) || !Number.isFinite(place.lon) || Math.abs(place.lat)>90 || Math.abs(place.lon)>180) continue;
+    const point = waypoints.get(key(place)) ?? {...place,details:new Set<string>()};
+    point.details.add([item.title,item.date,place.name,place.addressLine,place.city,place.country].filter(Boolean).join(", "));
+    waypoints.set(key(place),point);
+  }
+  const points = stops
     .map(
       (stop) =>
-        `    <rtept lat="${Number(stop.lat)}" lon="${Number(stop.lon)}"><name>${escapeXml(stop.name)}</name><desc>${escapeXml(stop.country)}</desc></rtept>`,
+        `    <rtept lat="${Number(stop.lat)}" lon="${Number(stop.lon)}"><name>${escapeXml(stop.name)}</name><desc>${escapeXml([[stop.addressLine,stop.city,stop.country].filter(Boolean).join(", "),...(waypoints.get(key(stop))?.details ?? [])].filter(Boolean).join(" · "))}</desc></rtept>`,
     )
     .join("\n");
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="GlobeTrotr" xmlns="http://www.topografix.com/GPX/1/1">\n  <metadata><name>${escapeXml(trip.name)}</name></metadata>\n  <rte><name>${escapeXml(trip.name)}</name>\n${points}\n  </rte>\n</gpx>\n`;
+  const routeKeys=new Set(stops.map(key));
+  const venues=[...waypoints].filter(([pointKey])=>!routeKeys.has(pointKey)).map(([,point])=>`  <wpt lat="${point.lat}" lon="${point.lon}"><name>${escapeXml(point.name)}</name><desc>${escapeXml([...point.details].join(" · "))}</desc></wpt>`).join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="GlobeTrotr" xmlns="http://www.topografix.com/GPX/1/1">\n  <metadata><name>${escapeXml(trip.name)}</name></metadata>\n${venues ? venues+"\n" : ""}  <rte><name>${escapeXml(trip.name)}</name>\n${points}\n  </rte>\n</gpx>\n`;
 }
 
 export function downloadTripGpx(trip: Trip) {
@@ -256,23 +268,23 @@ export function openPdf(
     )
     .join("")}</ul>
 <h3>${en ? "Expenses & claim" : "Uitgaven & declaratie"}</h3>
-<table><thead><tr><th>${en ? "Date" : "Datum"}</th><th>${en ? "Description" : "Omschrijving"}</th><th>${en ? "Category" : "Categorie"}</th><th>${en ? "Original" : "Origineel"}</th><th>${base}</th><th>${en ? "Billable" : "Declarabel"}</th></tr></thead>
+<table><thead><tr><th>${en ? "Date" : "Datum"}</th><th>${en ? "Description" : "Omschrijving"}</th><th>${en ? "Category" : "Categorie"}</th><th>${en ? "Original" : "Origineel"}</th><th>${escapeHtml(base)}</th><th>${en ? "Billable" : "Declarabel"}</th></tr></thead>
 <tbody>${trip.expenses
     .map(
       (e) =>
-        `<tr><td>${e.date}</td><td>${escapeHtml(e.title)}</td><td>${exportCategory(
+        `<tr><td>${e.date}</td><td>${escapeHtml(e.title)}</td><td>${escapeHtml(exportCategory(
           e.category,
           locale,
-        )}</td><td>${e.amount.toFixed(2)} ${e.currency}</td><td>${formatMoney(
+        ))}</td><td>${e.amount.toFixed(2)} ${escapeHtml(e.currency)}</td><td>${escapeHtml(formatMoney(
           convert(e.amount, e.currency, base, rates),
           base,
-        )}</td><td>${e.billable ? (en ? "yes" : "ja") : "—"}</td></tr>`,
+        ))}</td><td>${e.billable ? (en ? "yes" : "ja") : "—"}</td></tr>`,
     )
     .join("")}</tbody>
-<tfoot><tr><td colspan="4">${en ? "Total" : "Totaal"}</td><td>${formatMoney(total, base)}</td><td>${formatMoney(billable, base)}</td></tr></tfoot>
+<tfoot><tr><td colspan="4">${en ? "Total" : "Totaal"}</td><td>${escapeHtml(formatMoney(total, base))}</td><td>${escapeHtml(formatMoney(billable, base))}</td></tr></tfoot>
 </table>
-<p class="muted">${en ? "Budget" : "Budget"}: ${formatMoney(trip.budget, base)} · ${en ? "Remaining" : "Restant"}: ${formatMoney(trip.budget - total, base)}</p>
-<script>window.onload=()=>window.print()</script>
+<p class="muted">${en ? "Budget" : "Budget"}: ${escapeHtml(formatMoney(trip.budget, base))} · ${en ? "Remaining" : "Restant"}: ${escapeHtml(formatMoney(trip.budget - total, base))}</p>
+<script nonce="${exportScriptNonce()}">window.onload=()=>window.print()</script>
 </body></html>`;
 
   const w = window.open("", "_blank");
@@ -334,7 +346,7 @@ export function openGuide(
 </style></head><body>
 ${coverUrl ? `<img src="${escapeHtml(coverUrl)}" alt="" style="display:block;width:100%;height:240px;object-fit:cover;border-radius:14px;margin-bottom:20px">` : ""}
 <div class="cover"><div><h1>${escapeHtml(trip.name)}</h1>
-<div class="muted">${trip.start} ${en ? "to" : "t/m"} ${trip.end} · ${trip.stops.length} ${en ? "destinations" : "bestemmingen"} · ${en ? "budget" : "budget"} ${formatMoney(trip.budget, base)}</div></div>
+<div class="muted">${trip.start} ${en ? "to" : "t/m"} ${trip.end} · ${trip.stops.length} ${en ? "destinations" : "bestemmingen"} · ${en ? "budget" : "budget"} ${escapeHtml(formatMoney(trip.budget, base))}</div></div>
 <div class="muted">${escapeHtml(brand.brandName)}<br>${escapeHtml(brand.domain)}</div></div>
 
 <h2>${en ? "Route & navigation" : "Route & navigatie"}</h2>
@@ -372,11 +384,11 @@ ${
 ${journal.length ? `<h2>${en ? "Travel journal" : "Reisdagboek"}</h2>${journal.map((entry)=>`<div class="day"><b>${escapeHtml(entry.entry_date)} · ${escapeHtml(entry.title)}</b>${entry.location_name ? `<p class="muted">${escapeHtml(entry.location_name)}${entry.rating ? ` · ${"★".repeat(entry.rating)}${"☆".repeat(5-entry.rating)}` : ""}</p>` : entry.rating ? `<p class="muted">${"★".repeat(entry.rating)}${"☆".repeat(5-entry.rating)}</p>` : ""}${entry.photo_urls?.length ? `<div class="journal-photos">${entry.photo_urls.slice(0,6).map((url,index)=>`<figure><img src="${escapeHtml(url)}" alt="">${entry.photo_captions?.[index] ? `<figcaption>${escapeHtml(entry.photo_captions[index])}</figcaption>` : ""}</figure>`).join("")}</div>` : ""}${entry.body?`<p class="muted">${escapeHtml(entry.body).replaceAll("\n","<br>")}</p>`:""}</div>`).join("")}` : ""}
 
 <h2>Budget</h2>
-<p class="muted">${en ? "Spent" : "Uitgegeven"} ${formatMoney(total, base)} ${en ? "of" : "van"} ${formatMoney(trip.budget, base)} · ${en ? "remaining" : "restant"} ${formatMoney(
+<p class="muted">${en ? "Spent" : "Uitgegeven"} ${escapeHtml(formatMoney(total, base))} ${en ? "of" : "van"} ${escapeHtml(formatMoney(trip.budget, base))} · ${en ? "remaining" : "restant"} ${escapeHtml(formatMoney(
     trip.budget - total,
     base,
-  )}</p>
-<script>window.onload=()=>window.print()</script>
+  ))}</p>
+<script nonce="${exportScriptNonce()}">window.onload=()=>window.print()</script>
 </body></html>`;
 
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
@@ -410,4 +422,9 @@ function exportCategory(id: string, locale: AppLocale) {
     other: "Other",
   };
   return labels[id] ?? fallback;
+}
+
+function exportScriptNonce() {
+ if (typeof document === "undefined") return "";
+ return escapeHtml(document.querySelector<HTMLMetaElement>('meta[property="csp-nonce"]')?.content ?? "");
 }

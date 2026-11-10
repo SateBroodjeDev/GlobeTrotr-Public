@@ -1,3 +1,4 @@
+import { signOutWithPushCleanup } from "@/lib/push-account";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -69,7 +70,7 @@ function ResetPassword() {
       if (result.error) throw result.error;
       setPassword("");
       setRepeat("");
-      await supabase.auth.signOut({ scope: "local" });
+      await signOutWithPushCleanup(() => supabase.auth.signOut({ scope: "local" }));
       setState("done");
     } catch {
       setError(

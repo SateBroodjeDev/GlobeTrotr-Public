@@ -3,6 +3,16 @@ import { findTripHotelGaps } from "./hotel-gaps.ts";
 
 const validDay = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(`${value}T12:00:00Z`)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
 
+/** Keep local clocks and explicit arrival days; never infer an unknown time. */
+export function transportTimeSummary(item: TravelItem, text: (nl: string, en: string) => string) {
+  if (item.type !== "transport") return "";
+  const start = item.details?.startTime;
+  const end = item.details?.endTime;
+  const arrivalDate = item.endDate && item.endDate !== item.date ? ` (${item.endDate})` : "";
+  return [start ? `${text("Vertrek", "Departure")} ${start}` : "",
+    end ? `${text("Aankomst", "Arrival")} ${end}${arrivalDate}` : ""].filter(Boolean).join(" · ");
+}
+
 export type TimelineEntry = {
   id: string;
   day: string;

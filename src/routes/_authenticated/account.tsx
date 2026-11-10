@@ -1,3 +1,4 @@
+import { signOutWithPushCleanup } from "@/lib/push-account";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -646,7 +647,7 @@ function AccountPage() {
       await deleteAccount({ data: { confirmation: deleteConfirmation } });
       localStorage.removeItem(`globetrotr.workspace.v1.${user.id}`);
       localStorage.removeItem(`atlasledger.workspace.v1.${user.id}`);
-      await supabase.auth.signOut({ scope: "local" });
+      await signOutWithPushCleanup(() => supabase.auth.signOut({ scope: "local" }));
       window.location.assign("/");
     } catch (error) {
       toast.error(

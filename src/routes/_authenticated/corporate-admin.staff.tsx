@@ -2,7 +2,7 @@ import { getCorporateStaffActivity } from "@/lib/corporate-business.functions";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Plus, Save, UserCog } from "lucide-react";
+import { ChevronDown, Loader2, Plus, Save, UserCog } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
   suggestCorporateMailbox,
 } from "@/lib/corporate-business.functions";
 import { useLocale } from "@/lib/locale";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 export const Route = createFileRoute("/_authenticated/corporate-admin/staff")({ component: Page });
 const keys = ["users", "agencies", "finance", "mail", "operations", "issues"];
 function Page() {
@@ -37,6 +38,7 @@ function Page() {
   const [addOpen, setAddOpen] = useState(false);
   const [addMode, setAddMode] = useState<"new" | "existing">("new");
   const [requestingIdentity, setRequestingIdentity] = useState(false);
+  const [provisioningOpen, setProvisioningOpen] = useState(false);
   const [onboarding, setOnboarding] = useState({
     role: "support" as "owner" | "admin" | "support",
     permissions: { mail: true, issues: true } as Record<string, boolean>,
@@ -102,6 +104,7 @@ function Page() {
     }
   }
   async function choose(userId: string, source = q.data) {
+    setProvisioningOpen(false);
     setSelected(userId);
     const existing = source?.staff.find((x: any) => x.user_id === userId);
     if (existing) {
@@ -236,6 +239,10 @@ function Page() {
       setInviting(false);
     }
   }
+  const selectedStaff = form ? q.data?.staff.find((s: any) => s.user_id === form.userId) : undefined;
+  const provisioningNeedsReview = selectedStaff?.identityProvisioning?.status === "error"
+    || selectedStaff?.identityProvisioning?.invitation_status === "uncertain"
+    || Boolean(selectedStaff?.mailbox?.provisioning_error_code || selectedStaff?.mailbox?.last_sync_error_code);
   return (
     <Dialog open={addOpen} onOpenChange={(open) => { if (!inviting) setAddOpen(open); }}>
     <div className="space-y-6">
@@ -394,17 +401,29 @@ function Page() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {(q.data?.automationEnabled || q.data?.staff.find((s: any) => s.user_id === form.userId)?.identityProvisioning?.removal_requested_at) && (
-                <StaffProvisioningStatus
-                  job={
-                    q.data.staff.find((s: any) => s.user_id === form.userId)?.identityProvisioning
-                  }
-                  mailbox={q.data.staff.find((s: any) => s.user_id === form.userId)?.mailbox}
-                  active={q.data.staff.find((s: any) => s.user_id === form.userId)?.active === true}
-                  canManage={q.data.canManage && !q.data.staff.find((s: any) => s.user_id === form.userId)?.cleanupOnly}
-                  busy={requestingIdentity}
-                  onRequest={requestIdentity}
-                />
+              {(q.data?.automationEnabled || selectedStaff?.identityProvisioning?.removal_requested_at) && (
+                <Collapsible open={provisioningOpen} onOpenChange={setProvisioningOpen} className="space-y-2">
+                  <CollapsibleTrigger asChild>
+                    <Button type="button" variant="ghost" size="sm" className="group h-auto min-h-9 w-full flex-wrap justify-start gap-2 px-2 text-left">
+                      <UserCog className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span className="flex-1">{text("Teamaccount en mailbox", "Team account and mailbox")}</span>
+                      {provisioningNeedsReview ? <Badge variant="destructive">{text("Controle nodig", "Needs review")}</Badge>
+                        : selectedStaff?.identityProvisioning?.removal_requested_at ? <Badge variant="secondary">{text("Verwijdering", "Removal")}</Badge>
+                        : ["pending", "processing"].includes(selectedStaff?.identityProvisioning?.status) ? <Badge variant="secondary">{text("In behandeling", "In progress")}</Badge> : null}
+                      <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-data-[state=open]:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <StaffProvisioningStatus
+                      job={selectedStaff?.identityProvisioning}
+                      mailbox={selectedStaff?.mailbox}
+                      active={selectedStaff?.active === true}
+                      canManage={q.data?.canManage === true && !selectedStaff?.cleanupOnly}
+                      busy={requestingIdentity}
+                      onRequest={requestIdentity}
+                    />
+                  </CollapsibleContent>
+                </Collapsible>
               )}
               {form.removalQueued && !q.data?.staff.some((s: any) => s.user_id === form.userId) && (
                 <p role="status">{text("Verwijdering afgerond. Het gewone GBT-account blijft behouden.", "Removal completed. The ordinary GBT account is preserved.")}</p>
@@ -488,6 +507,7 @@ function Page() {
                 <Save className="size-4" />
                 {text("Medewerker opslaan", "Save staff member")}
               </Button>
+
               <StaffActivity userId={selected} />
               {q.data?.staff.some((member: any) => member.user_id === form.userId) && (
                 <div className="space-y-2 border-t pt-4">

@@ -1,3 +1,4 @@
+import { signOutWithPushCleanup } from "@/lib/push-account";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -147,7 +148,7 @@ function TeamLogin() {
         variant="ghost"
         onClick={() => void logoutGbt({
           prepare: () => prepareGbtLogout(),
-          signOut: () => supabase.auth.signOut(),
+          signOut: () => signOutWithPushCleanup(() => supabase.auth.signOut()),
           clear: () => undefined,
           redirect: (url) => window.location.assign(url),
         }).catch(() => toast.error(text("Uitloggen is niet gelukt. Probeer het opnieuw.", "Sign out failed. Please try again.")))}

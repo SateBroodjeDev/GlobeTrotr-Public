@@ -88,10 +88,10 @@ export function TripRouteLegModes({ trip, editable, text, save, onEditBooking }:
           const bookedFlight = items.some(item => item.id === bookingId && item.type === "flight");
           const navigationUrl = googleMapsDirectionsUrl(from, to, current);
           const busy = savingIndex === index;
-          return <div key={`${from.id}:${to.id}`} className="grid items-center gap-3 rounded-xl border bg-muted/20 p-3 sm:grid-cols-[minmax(0,1fr)_210px]">
+          return <div key={bookingId ? `booking:${bookingId}` : `${from.id}:${to.id}`} className="grid items-center gap-3 rounded-xl border bg-muted/20 p-3 sm:grid-cols-[minmax(0,1fr)_210px]">
             <div className="flex min-w-0 items-center gap-2">
               <span className="grid size-6 shrink-0 place-items-center rounded-full bg-background text-xs font-semibold">{index + 1}</span>
-              <span className="min-w-0 truncate text-sm">{current === "flight" && <Plane className="mr-1 inline size-3.5" />}{routePlaceName(from)} → {routePlaceName(to)}</span>
+              <span className="min-w-0 truncate text-sm">{current === "flight" && <Plane className="mr-1 inline size-3.5" />}{bookingId ? from.name : routePlaceName(from)} → {bookingId ? to.name : routePlaceName(to)}</span>
               {current && <CheckCircle2 className="size-4 shrink-0 text-primary" />}
             </div>
             <div className="relative">

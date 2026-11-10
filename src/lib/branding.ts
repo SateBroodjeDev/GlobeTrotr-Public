@@ -1,6 +1,11 @@
 import type { Branding, PlanId } from "./types";
 
-export const GLOBETROTR_BRANDING: Branding={brandName:"GlobeTrotr",domain:"globetrotr.nl",accent:172,tagline:"Plan elke reis. Verantwoord elke euro."};
+export const GLOBETROTR_SLOGAN = {
+  nl: "Jullie hele rondreis, samen geregeld op één plek.",
+  en: "Your whole trip, planned together in one place.",
+} as const;
+
+export const GLOBETROTR_BRANDING: Branding={brandName:"GlobeTrotr",domain:"globetrotr.nl",accent:172,tagline:GLOBETROTR_SLOGAN.nl};
 export type AgencyBrandingSource={system_name?:string;domain?:string;accent?:number;tagline?:string;logo_path?:string|null}|null|undefined;
 
 /** Eén hiërarchie voor app, exports en later reisafwijkingen. */

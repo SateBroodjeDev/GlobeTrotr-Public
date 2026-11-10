@@ -117,7 +117,7 @@ export const getBillingOverview = createServerFn({ method: "GET" })
     const transactionIds = transactions.map((item) => item.id).filter(Boolean);
     const refundResult = transactionIds.length
       ? await db.from("billing_refund_requests")
-          .select("id,transaction_id,status,reason,review_note,created_at,reviewed_at")
+          .select("id,transaction_id,status,provider_status,reason,review_note,created_at,reviewed_at")
           .in("transaction_id", transactionIds)
       : { data: [], error: null };
     if (refundResult.error) throw new Error("BILLING_REFUNDS_FAILED");

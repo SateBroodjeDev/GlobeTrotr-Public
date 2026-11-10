@@ -14,7 +14,18 @@ export function routeReloadLocation(origin: string, pathname: string, search = "
 const portalPaths =
   /^\/(?:auth|register|reset-password|team-login|oauth-callback|complete-profile|session-bridge|token|dashboard|trips|account|billing|agency-admin|corporate-admin|company-mail|branding|team|analytics|client-portal|invite|uitnodiging|agency-invite|agency-uitnodiging)(?:\/|$)/;
 const websitePaths =
-  /^\/(?:demo|features|mogelijkheden|prijzen|pricing|about|for-groups|for-travelers|for-agencies|roadmap|updates|changelog|privacy|report-content|algemene-voorwaarden|terms|beta-voorwaarden|terugbetalingsbeleid|refund-policy|beta|known-issues|bekende-problemen|trip|reis|quote)(?:\/|$)/;
+  /^\/(?:en|demo|features|mogelijkheden|prijzen|pricing|about|for-groups|for-travelers|for-agencies|roadmap|updates|changelog|privacy|report-content|algemene-voorwaarden|terms|beta-voorwaarden|terugbetalingsbeleid|refund-policy|beta|trip|reis|quote)(?:\/|$)/;
+
+/** Public chrome follows the request origin during SSR as well as in the browser. */
+export function publicWebsiteLayout(origin: string | undefined, pathname: string): boolean {
+  if (!origin) return false;
+  try {
+    const hostname = new URL(origin).hostname;
+    if (["globetrotr.nl", "www.globetrotr.nl"].includes(hostname)) return true;
+    return ["localhost", "127.0.0.1", "[::1]"].includes(hostname)
+      && (pathname === "/" || websitePaths.test(pathname) || /^\/(?:contact|status)(?:\/|$)/.test(pathname));
+  } catch { return false; }
+}
 
 /** Keep application entry points on the portal without moving public links or secrets in the URL. */
 export function canonicalSiteLocation(hostname: string, pathname: string, search = "", hash = "") {

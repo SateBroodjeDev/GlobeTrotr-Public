@@ -1,9 +1,13 @@
 // Browser-side integrations with free, keyless public APIs.
 
+export type GeoPlaceType = "airport" | "train_station" | "bus_stop" | "ferry_terminal" | "street" | "address" | "city" | "town" | "village" | "country" | "accommodation" | "attraction";
+
 export type GeoResult = {
   name: string;
   country: string;
   city?: string;
+  /** Search-result presentation only, derived from provider categories. */
+  placeType?: GeoPlaceType;
   /** Distinguishing address line supplied by the geocoder. */
   addressLine?: string;
   lat: number;

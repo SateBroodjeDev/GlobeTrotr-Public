@@ -1,3 +1,7 @@
+import { locationDraft, locationFieldError, validLocationPoint } from "./manual-location";
+import { persistWorkspaceWithoutPlanOverwrite } from "./workspace-plan.server";
+import { withApplicationDiagnostics } from "./application-diagnostics.server";
+import { tripSaveDiagnosticCode } from "./application-diagnostics";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Trip, TripMemberRole, WorkspaceState } from "@/lib/types";
@@ -27,6 +31,10 @@ function isIsoDate(value: string) {
 
 /** Keep invalid trip settings out of both relational storage and the JSON backup. */
 function normalizeTripForPersistence(trip: Trip): Trip {
+  for (const location of [...trip.stops, ...(trip.travelItems ?? []).flatMap(item => [item.location, item.departure, item.arrival].filter(Boolean))]) {
+    // Legacy records may have no country. Do not make unrelated edits impossible.
+    if (!location || !validLocationPoint(location) || locationFieldError({ ...locationDraft(location), country: location.country || "Unknown" })) throw new Error("Controleer naam, land, adres en kaartpunt van de locatie.");
+  }
   const name = trip.name.trim();
   const description = trip.description?.trim();
   if (!name) throw new Error("Een reisnaam is verplicht.");
@@ -168,11 +176,13 @@ async function replaceTripChildren(
 
   await replace(
     "trip_stops",
-    trip.stops.map(({ arrive, ...stop }, position) => ({
+    trip.stops.map(({ arrive, city, addressLine, ...stop }, position) => ({
       ...scope,
       ...stop,
       position,
       arrive_date: arrive ?? null,
+      city: city ?? null,
+      address_line: addressLine ?? null,
     })),
   );
   await replace(
@@ -366,7 +376,7 @@ function withDatabaseTripIds(data: unknown, rows: StoredTrip[]): unknown {
 
 async function loadRelationalTrips(client: UntypedSupabase, userId: string): Promise<Trip[]> {
   const parentColumns =
-    "trip_uuid, workspace_user_id, revision::text, name, description, template, start_date, end_date, budget, travelers, archived, is_public, share_financials, share_pin_hash";
+    "trip_uuid, workspace_uuid, workspace_user_id, revision::text, name, description, template, start_date, end_date, budget, travelers, archived, is_public, share_financials, share_pin_hash";
   const [{ data: ownedParents, error: ownedError }, { data: memberships, error: membershipError }] =
     await Promise.all([
       client
@@ -402,25 +412,34 @@ async function loadRelationalTrips(client: UntypedSupabase, userId: string): Pro
   const agencyClient = supabaseAdmin as unknown as UntypedSupabase;
   const { data: agencyMemberships, error: agencyMembershipError } = await agencyClient
     .from("workspace_members")
-    .select("workspace_uuid, role, permission_overrides")
+    .select("workspace_uuid, role, permission_overrides,workspaces!inner(plan)")
     .eq("user_id", userId)
     .eq("status", "active")
     .neq("role", "owner");
   let agencyParents: Record<string, any>[] = [];
-  if (!agencyMembershipError && agencyMemberships?.length) {
+  const agencyVisibility = new Map<string, boolean>();
+  if (agencyMembershipError) throw new Error("AGENCY_PERMISSIONS_UNAVAILABLE");
+  if (agencyMemberships?.length) {
     const candidateWorkspaceIds = agencyMemberships.map(
       (membership: any) => membership.workspace_uuid,
     );
-    const { data: permissionRows } = await agencyClient
+    const { data: permissionRows, error: permissionError } = await agencyClient
       .from("agency_role_permissions")
       .select("workspace_uuid, role, permissions")
       .in("workspace_uuid", candidateWorkspaceIds);
+    if (permissionError) throw new Error("AGENCY_PERMISSIONS_UNAVAILABLE");
     const defaultsByRole = new Map(
       (permissionRows ?? []).map((row: any) => [
         `${row.workspace_uuid}:${row.role}`,
         row.permissions,
       ]),
     );
+    for (const membership of agencyMemberships) {
+      const workspace = Array.isArray(membership.workspaces) ? membership.workspaces[0] : membership.workspaces;
+      if (workspace?.plan === "agency") agencyVisibility.set(String(membership.workspace_uuid),
+        effectiveAgencyPermissions(membership.role,defaultsByRole.get(`${membership.workspace_uuid}:${membership.role}`) as Partial<AgencyPermissionMap> | undefined,
+          membership.permission_overrides as Partial<AgencyPermissionMap> | null).trips_view);
+    }
     const visibleMemberships = agencyMemberships.filter(
       (membership: any) =>
         effectiveAgencyPermissions(
@@ -439,7 +458,7 @@ async function loadRelationalTrips(client: UntypedSupabase, userId: string): Pro
     );
     const { data: rows, error: agencyError } = await client
       .from("trips")
-      .select(`${parentColumns}, workspace_uuid`)
+      .select(parentColumns)
       .in("workspace_uuid", workspaceIds)
       .order("start_date", { ascending: true });
     if (agencyError) throw agencyError;
@@ -453,9 +472,8 @@ async function loadRelationalTrips(client: UntypedSupabase, userId: string): Pro
     ...((ownedParents ?? []) as Record<string, any>[]),
     ...((sharedParents ?? []) as Record<string, any>[]),
     ...agencyParents,
-  ].filter(
-    (row, index, all) =>
-      all.findIndex((candidate) => candidate.trip_uuid === row.trip_uuid) === index,
+  ].filter(row => row.workspace_user_id === userId || agencyVisibility.get(String(row.workspace_uuid)) !== false).filter(
+    (row, index, all) => all.findIndex(candidate => candidate.trip_uuid === row.trip_uuid) === index,
   );
   const ids = rows.map((row) => String(row.trip_uuid));
   if (!ids.length) return [];
@@ -539,6 +557,8 @@ async function loadRelationalTrips(client: UntypedSupabase, userId: string): Pro
         id: String(stop.id),
         name: String(stop.name),
         country: String(stop.country ?? ""),
+        ...(stop.city ? { city: String(stop.city) } : {}),
+        ...(stop.address_line ? { addressLine: String(stop.address_line) } : {}),
         lat: Number(stop.lat),
         lon: Number(stop.lon),
         arrive: stop.arrive_date ?? undefined,
@@ -640,7 +660,7 @@ export const loadWorkspace = createServerFn({ method: "GET" })
       const db = supabase as unknown as UntypedSupabase;
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const admin = supabaseAdmin as unknown as UntypedSupabase;
-      const { data: agencyMembership } = await admin
+      const { data: agencyMembership, error: agencyMemberError } = await admin
         .from("workspace_members")
         .select("workspace_uuid, role")
         .eq("user_id", userId)
@@ -648,9 +668,17 @@ export const loadWorkspace = createServerFn({ method: "GET" })
         .neq("role", "owner")
         .limit(1)
         .maybeSingle();
+      if (agencyMemberError) throw new Error("AGENCY_PERMISSIONS_UNAVAILABLE");
       let data = personalWorkspace as Record<string, any>;
       let workspaceRole: "editor" | "accountant" | undefined;
       if (agencyMembership) {
+        const membership = await admin.from("workspace_members").select("role,permission_overrides")
+          .eq("workspace_uuid",agencyMembership.workspace_uuid).eq("user_id",userId).eq("status","active").maybeSingle();
+        const defaults = await admin.from("agency_role_permissions").select("permissions")
+          .eq("workspace_uuid",agencyMembership.workspace_uuid).eq("role",agencyMembership.role).maybeSingle();
+        if (membership.error || defaults.error || !membership.data ||
+          !effectiveAgencyPermissions(agencyMembership.role, defaults.data?.permissions, membership.data.permission_overrides).trips_view)
+          throw new Error("AGENCY_PERMISSION_REQUIRED");
         const { data: agencyWorkspace } = await admin
           .from("workspaces")
           .select(
@@ -704,9 +732,8 @@ export const loadWorkspace = createServerFn({ method: "GET" })
         },
       };
     } catch {
-      // De eerste UUID-migratie kan nog niet uitgevoerd zijn; JSON is dan de
-      // compatibele bron tot de relationele tabellen beschikbaar zijn.
-      return personalWorkspace;
+      // Permission/read failures must not restore stale JSON authority.
+      throw new Error("WORKSPACE_LOAD_UNAVAILABLE");
     }
   });
 
@@ -731,7 +758,7 @@ export const createTrip = createServerFn({ method: "POST" })
     let workspaceOwnerId = context.userId;
     let workspaceId: string | undefined;
     let isAgencyWorkspace = false;
-    const { data: agencyMembership } = await db
+    const { data: agencyMembership, error: agencyMemberError } = await db
       .from("workspace_members")
       .select("workspace_uuid, role, permission_overrides")
       .eq("user_id", context.userId)
@@ -739,8 +766,9 @@ export const createTrip = createServerFn({ method: "POST" })
       .neq("role", "owner")
       .limit(1)
       .maybeSingle();
+    if (agencyMemberError) throw new Error("AGENCY_PERMISSIONS_UNAVAILABLE");
     if (agencyMembership) {
-      const [{ data: roleSettings }, { data: agencyWorkspace }] = await Promise.all([
+      const [{ data: roleSettings, error: roleError }, { data: agencyWorkspace, error: workspaceError }] = await Promise.all([
         db
           .from("agency_role_permissions")
           .select("permissions")
@@ -758,7 +786,7 @@ export const createTrip = createServerFn({ method: "POST" })
         roleSettings?.permissions,
         agencyMembership.permission_overrides,
       );
-      if (agencyWorkspace?.plan !== "agency" || !permissions.trips_create)
+      if (roleError || workspaceError || agencyWorkspace?.plan !== "agency" || !permissions.trips_create)
         throw new Error("Je mag geen reizen aanmaken in deze Agency-workspace.");
       workspaceOwnerId = agencyWorkspace.user_id;
       workspaceId = String(agencyMembership.workspace_uuid);
@@ -809,7 +837,7 @@ export const createTrip = createServerFn({ method: "POST" })
 export const saveTrip = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: { trip: Trip }) => input)
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data, context }) => withApplicationDiagnostics("trip.save", async () => {
     let trip = normalizeTripForPersistence(data.trip);
     if (!trip.revision || !/^\d+$/.test(trip.revision)) {
       throw new Error(
@@ -823,7 +851,8 @@ export const saveTrip = createServerFn({ method: "POST" })
       .select("workspace_user_id, workspace_uuid")
       .eq("trip_uuid", trip.id)
       .maybeSingle();
-    if (storedError || !storedTrip) throw new Error("Reis niet gevonden.");
+    if (storedError) throw new Error("Reis niet gevonden.", { cause: "TRIP_LOOKUP_FAILED" });
+    if (!storedTrip) throw new Error("Reis niet gevonden.");
     const ownerId = String(storedTrip.workspace_user_id);
     let accessRole: TripMemberRole = "owner";
     let agencyPermissions: AgencyPermissionMap | undefined;
@@ -895,6 +924,10 @@ export const saveTrip = createServerFn({ method: "POST" })
         : protectTripUpdate(current, trip, accessRole);
       trip = normalizeTripForPersistence(trip);
     }
+    if (trip.stops.some(stop => stop.city !== undefined || stop.addressLine !== undefined)) {
+      const { error: schemaError } = await db.from("trip_stops").select("city,address_line").limit(0);
+      if (schemaError) throw new Error("De adresopslag is nog niet beschikbaar. Je wijziging is niet opgeslagen.", {cause: "LOCATION_SCHEMA_MISSING"});
+    }
     const { data: saved, error } = await db.rpc("save_trip_snapshot_with_options_as", {
       p_workspace_user_id: ownerId,
       p_actor_user_id: context.userId,
@@ -910,10 +943,12 @@ export const saveTrip = createServerFn({ method: "POST" })
       if (code === "PGRST202") {
         throw new Error(
           "De database-update voor veilige reisopslag ontbreekt. Voer de versiemigratie uit en herlaad de pagina.",
+          { cause: "TRIP_SAVE_SCHEMA_MISSING" },
         );
       }
       throw new Error(
         "Reis kon niet worden opgeslagen. Kopieer je invoer en herlaad de pagina voordat je opnieuw probeert.",
+        { cause: tripSaveDiagnosticCode(code) },
       );
     }
     const row = Array.isArray(saved) ? saved[0] : saved;
@@ -925,10 +960,10 @@ export const saveTrip = createServerFn({ method: "POST" })
       typeof row.trip_uuid !== "string" ||
       typeof row.revision !== "string"
     ) {
-      throw new Error("Opslag kon niet worden bevestigd. Herlaad de pagina voordat je verdergaat.");
+      throw new Error("Opslag kon niet worden bevestigd. Herlaad de pagina voordat je verdergaat.", { cause: "TRIP_SAVE_UNCONFIRMED" });
     }
     return { tripId: row.trip_uuid, revision: row.revision };
-  });
+  }));
 
 export const deleteTrip = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -980,31 +1015,7 @@ export const saveWorkspace = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as unknown as UntypedSupabase;
-    const workspace = data.data as Partial<WorkspaceState>;
-    const { data: stored } = await db
-      .from("workspaces")
-      .select("plan")
-      .eq("user_id", context.userId)
-      .maybeSingle();
-    // Het betaalplan is providergestuurd. Nooit een browserwaarde vertrouwen.
-    const plan = ["free", "pro", "agency"].includes(stored?.plan ?? "") ? stored.plan : "free";
-    const safeWorkspace = { ...workspace, plan };
-    const baseCurrency =
-      typeof workspace.baseCurrency === "string" && /^[A-Z]{3}$/.test(workspace.baseCurrency)
-        ? workspace.baseCurrency
-        : "EUR";
-    const { error } = await db.from("workspaces").upsert(
-      {
-        user_id: context.userId,
-        data: safeWorkspace as never,
-        plan,
-        base_currency: baseCurrency,
-        branding: workspace.branding ?? {},
-      },
-      { onConflict: "user_id" },
-    );
-    if (error) throw error;
-    return { ok: true };
+    return persistWorkspaceWithoutPlanOverwrite(db, context.userId, data.data as Partial<WorkspaceState>);
   });
 
 export const updateSharing = createServerFn({ method: "POST" })

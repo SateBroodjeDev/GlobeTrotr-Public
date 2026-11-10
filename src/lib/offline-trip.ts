@@ -1,14 +1,15 @@
-import { isRoutePlanningItem, type Expense, type ExpenseCategory, type Trip } from "./types.ts";
+import { offlineNamespace, offlineOwner, scopedOffline } from "./offline-account.ts";
+import { isRoutePlanningItem, type Expense, type ExpenseCategory, type Trip, type TravelLocation } from "./types.ts";
 import { executeOfflineTransaction } from "./offline-storage.ts";
 
-const DB_NAME = "globetrotr-offline-v1";
+const DB_NAME = "globetrotr-offline-v2";
 const STORE_NAME = "trip-packs";
 const DB_VERSION = 2;
 const DOCUMENT_STORE = "trip-documents";
 const KEY_STORE = "encryption-keys";
-const PACK_BACKUP_PREFIX = "globetrotr.offline-pack.";
+const PACK_BACKUP_PREFIX = "globetrotr.offline-pack-v2.";
 
-function backupKey(tripId: string) { return `${PACK_BACKUP_PREFIX}${tripId}`; }
+function backupKey(tripId: string) { return `${PACK_BACKUP_PREFIX}${offlineOwner()}.${tripId}`; }
 function readBackup(tripId: string): OfflineTripPack | undefined {
   if (typeof window === "undefined") return undefined;
   try { const value = window.localStorage.getItem(backupKey(tripId)); return value ? JSON.parse(value) as OfflineTripPack : undefined; } catch { return undefined; }
@@ -24,7 +25,7 @@ export type OfflineTripPack = {
   savedAt: string;
   payers: Array<{ id: string; name: string }>;
   queuedExpenses: OfflineExpense[];
-  stops: Array<{ id: string; name: string; country: string; arrive?: string; nights?: number }>;
+  stops: Array<{ id: string; name: string; country: string; city?: string; addressLine?: string; lat?: number; lon?: number; arrive?: string; nights?: number }>;
   itinerary: Array<{ id: string; day: string; title: string; notes?: string }>;
   travelItems: Array<{
     id: string;
@@ -37,6 +38,7 @@ export type OfflineTripPack = {
     departure?: string;
     arrival?: string;
     location?: string;
+    locationDetails?: {location?: TravelLocation; departure?: TravelLocation; arrival?: TravelLocation};
     startTime?: string;
     endTime?: string;
   }>;
@@ -80,7 +82,7 @@ export function summarizeOfflineTripPack(pack: OfflineTripPack): OfflineTripPack
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (!("indexedDB" in window)) return reject(new Error("OFFLINE_STORAGE_UNAVAILABLE"));
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    const request = indexedDB.open(offlineNamespace(DB_NAME), DB_VERSION);
     request.onupgradeneeded = () => {
       if (!request.result.objectStoreNames.contains(STORE_NAME)) {
         request.result.createObjectStore(STORE_NAME, { keyPath: "tripId" });
@@ -110,7 +112,7 @@ async function documentKey() {
   return key;
 }
 
-export async function saveOfflineDocument(input: { id: string; tripId: string; fileName: string; mimeType: string; blob: Blob }) {
+async function saveOfflineDocumentOperation(input: { id: string; tripId: string; fileName: string; mimeType: string; blob: Blob }) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await documentKey(), await input.blob.arrayBuffer());
   const row: OfflineDocument = { id: input.id, tripId: input.tripId, fileName: input.fileName, mimeType: input.mimeType, size: input.blob.size, savedAt: new Date().toISOString(), iv: Array.from(iv), ciphertext };
@@ -118,23 +120,23 @@ export async function saveOfflineDocument(input: { id: string; tripId: string; f
   return row;
 }
 
-export async function listOfflineDocuments(tripId: string) {
+async function listOfflineDocumentsOperation(tripId: string) {
   const rows = await databaseRequest<OfflineDocument[]>(DOCUMENT_STORE, "readonly", (store) => store.getAll());
   return rows.filter((row) => row.tripId === tripId);
 }
 
-export async function openOfflineDocument(id: string) {
+async function openOfflineDocumentOperation(id: string) {
   const row = await databaseRequest<OfflineDocument | undefined>(DOCUMENT_STORE, "readonly", (store) => store.get(id));
   if (!row) throw new Error("OFFLINE_DOCUMENT_NOT_FOUND");
   const content = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(row.iv) }, await documentKey(), row.ciphertext);
   return new Blob([content], { type: row.mimeType || "application/octet-stream" });
 }
 
-export async function deleteOfflineDocument(id: string) {
+async function deleteOfflineDocumentOperation(id: string) {
   await databaseRequest(DOCUMENT_STORE, "readwrite", (store) => store.delete(id));
 }
 
-export async function offlineStorageUsage() {
+async function offlineStorageUsageOperation() {
   const [documents, packs] = await Promise.all([
     databaseRequest<OfflineDocument[]>(DOCUMENT_STORE, "readonly", (store) => store.getAll()),
     databaseRequest<OfflineTripPack[]>(STORE_NAME, "readonly", (store) => store.getAll()),
@@ -157,7 +159,7 @@ export function createOfflineTripPack(trip: Trip, locale: string, payers: Array<
     savedAt: new Date().toISOString(),
     payers: payers.slice(0, 100).map(({ id, name }) => ({ id, name })),
     queuedExpenses: queuedExpenses.slice(0, 50),
-    stops: trip.stops.map(({ id, name, country, arrive, nights }) => ({ id, name, country, arrive, nights })),
+    stops: trip.stops.map(({ id, name, country, city, addressLine, lat, lon, arrive, nights }) => ({ id, name, country, city, addressLine, lat, lon, arrive, nights })),
     itinerary: trip.itinerary.map(({ id, day, title, notes }) => ({ id, day, title, notes })),
     travelItems: (trip.travelItems ?? []).flatMap((item) => {
       if (isRoutePlanningItem(item)) return [];
@@ -172,6 +174,11 @@ export function createOfflineTripPack(trip: Trip, locale: string, payers: Array<
         departure: item.departure?.name,
         arrival: item.arrival?.name,
         location: item.location?.name,
+        locationDetails: {
+          location: offlineLocation(item.location),
+          departure: offlineLocation(item.departure),
+          arrival: offlineLocation(item.arrival),
+        },
         startTime: item.details?.startTime,
         endTime: item.details?.endTime,
       }];
@@ -179,7 +186,14 @@ export function createOfflineTripPack(trip: Trip, locale: string, payers: Array<
   };
 }
 
-export async function saveOfflineTrip(pack: OfflineTripPack) {
+/** Explicit allowlist: never copy arbitrary booking/provider fields into offline packs. */
+function offlineLocation(location?: TravelLocation): TravelLocation | undefined {
+  if (!location) return undefined;
+  const {name,country,city,addressLine,lat,lon}=location;
+  return {name,country,city,addressLine,lat,lon};
+}
+
+async function saveOfflineTripOperation(pack: OfflineTripPack) {
   const serialized = JSON.stringify(pack);
   try {
     await transaction("readwrite", (store) => store.put(pack));
@@ -192,7 +206,7 @@ export async function saveOfflineTrip(pack: OfflineTripPack) {
   catch { /* A full/blocked localStorage must not invalidate a committed IndexedDB save. */ }
 }
 
-export async function getOfflineTrip(tripId: string) {
+async function getOfflineTripOperation(tripId: string) {
   try {
     return (await transaction<OfflineTripPack | undefined>("readonly", (store) => store.get(tripId))) ?? readBackup(tripId);
   } catch {
@@ -200,7 +214,7 @@ export async function getOfflineTrip(tripId: string) {
   }
 }
 
-export async function deleteOfflineTrip(tripId: string) {
+async function deleteOfflineTripOperation(tripId: string) {
   const cleanup: Promise<unknown>[] = [Promise.resolve().then(() => window.localStorage.removeItem(backupKey(tripId)))];
   if ("indexedDB" in window) {
     cleanup.push(transaction("readwrite", (store) => store.delete(tripId)));
@@ -213,9 +227,9 @@ export async function deleteOfflineTrip(tripId: string) {
   if (failed?.status === "rejected") throw failed.reason;
 }
 
-export async function clearOfflineTrips() {
+async function clearOfflineTripsOperation() {
   if (typeof window === "undefined") return;
-  const databaseCleanup = "indexedDB" in window ? Promise.allSettled([
+  const databaseCleanup = "indexedDB" in window ? Promise.all([
     transaction("readwrite", (store) => store.clear()),
     databaseRequest(DOCUMENT_STORE, "readwrite", (store) => store.clear()),
     databaseRequest(KEY_STORE, "readwrite", (store) => store.clear()),
@@ -223,13 +237,16 @@ export async function clearOfflineTrips() {
   try {
     for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
       const key = window.localStorage.key(index);
-      if (key?.startsWith(PACK_BACKUP_PREFIX)) window.localStorage.removeItem(key);
+      if (key?.startsWith(`${PACK_BACKUP_PREFIX}${offlineOwner()}.`)) window.localStorage.removeItem(key);
     }
-  } catch { /* Browser privacy settings may block localStorage; still finish IndexedDB cleanup. */ }
+  } catch {
+    await databaseCleanup;
+    throw new Error("OFFLINE_STORAGE_CLEANUP_FAILED");
+  }
   await databaseCleanup;
 }
 
-export async function queueOfflineExpense(tripId: string, expense: OfflineExpense) {
+async function queueOfflineExpenseOperation(tripId: string, expense: OfflineExpense) {
   const pack = await getOfflineTrip(tripId);
   if (!pack) throw new Error("OFFLINE_TRIP_NOT_FOUND");
   if ((pack.queuedExpenses ?? []).length >= 50) throw new Error("OFFLINE_EXPENSE_LIMIT");
@@ -238,7 +255,7 @@ export async function queueOfflineExpense(tripId: string, expense: OfflineExpens
   return pack;
 }
 
-export async function removeQueuedOfflineExpenses(tripId: string, ids: string[]) {
+async function removeQueuedOfflineExpensesOperation(tripId: string, ids: string[]) {
   const pack = await getOfflineTrip(tripId);
   if (!pack) return;
   const completed = new Set(ids);
@@ -258,3 +275,15 @@ export function findOfflineExpenseConflicts(current: Expense[], queued: OfflineE
     return server !== undefined && JSON.stringify({ date: server.date, title: server.title, amount: server.amount, currency: server.currency, paidBy: server.paidBy }) !== JSON.stringify({ date: expense.date, title: expense.title, amount: expense.amount, currency: expense.currency, paidBy: expense.paidBy });
   }).map((expense) => expense.id);
 }
+
+export const saveOfflineDocument = scopedOffline(saveOfflineDocumentOperation);
+export const listOfflineDocuments = scopedOffline(listOfflineDocumentsOperation);
+export const openOfflineDocument = scopedOffline(openOfflineDocumentOperation);
+export const deleteOfflineDocument = scopedOffline(deleteOfflineDocumentOperation);
+export const offlineStorageUsage = scopedOffline(offlineStorageUsageOperation);
+export const saveOfflineTrip = scopedOffline(saveOfflineTripOperation);
+export const getOfflineTrip = scopedOffline(getOfflineTripOperation);
+export const deleteOfflineTrip = scopedOffline(deleteOfflineTripOperation);
+export const clearOfflineTrips = scopedOffline(clearOfflineTripsOperation);
+export const queueOfflineExpense = scopedOffline(queueOfflineExpenseOperation);
+export const removeQueuedOfflineExpenses = scopedOffline(removeQueuedOfflineExpensesOperation);

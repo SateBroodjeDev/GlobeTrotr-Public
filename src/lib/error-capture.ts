@@ -8,41 +8,16 @@ function record(error: unknown) {
   lastCapturedError = { error, at: Date.now() };
 }
 
-// h3's HTTPError serializes to {"status":500,"unhandled":true,"message":"HTTPError"} —
-// no stack, no cause — so a plain console.error(error) reaches the log pipeline with
-// the failure detail stripped. Expand Error-like args into a string that keeps the
-// message, stack, and the full cause chain.
-const CAUSE_DEPTH_LIMIT = 5;
-const DESCRIPTION_LENGTH_LIMIT = 8_000;
-
+/** Never serialize exception messages, stacks, causes or arbitrary objects to stdout. */
 export function describeError(error: unknown): string {
-  const parts: string[] = [];
-  let current: unknown = error;
-  for (let depth = 0; depth < CAUSE_DEPTH_LIMIT && current != null; depth++) {
-    if (!(current instanceof Error)) {
-      parts.push(typeof current === "string" ? current : safeStringify(current));
-      break;
-    }
-    const label = depth === 0 ? "" : "caused by: ";
-    const status = describeStatus(current);
-    parts.push(`${label}${current.stack ?? `${current.name}: ${current.message}`}${status}`);
-    current = current.cause;
+  let status: unknown;
+  if (error instanceof Error) {
+    const descriptor = Object.getOwnPropertyDescriptor(error, "status") ??
+      Object.getOwnPropertyDescriptor(error, "statusCode");
+    status = descriptor?.value;
   }
-  return parts.join("\n").slice(0, DESCRIPTION_LENGTH_LIMIT);
-}
-
-function describeStatus(error: Error): string {
-  const { status, statusCode } = error as { status?: unknown; statusCode?: unknown };
-  const value = status ?? statusCode;
-  return typeof value === "number" ? ` (status ${value})` : "";
-}
-
-function safeStringify(value: unknown): string {
-  try {
-    return JSON.stringify(value) ?? String(value);
-  } catch {
-    return String(value);
-  }
+  return typeof status === "number" && Number.isInteger(status) && status >= 400 && status <= 599
+    ? `APP_UNHANDLED_ERROR (status ${status})` : "APP_UNHANDLED_ERROR";
 }
 
 function isErrorLike(value: unknown): value is Error {
@@ -51,13 +26,24 @@ function isErrorLike(value: unknown): value is Error {
 
 // Wrap console.error so errors logged by any layer — including h3's internal
 // unhandled-error logging, which this file cannot hook directly — are both
-// recorded for consumeLastCapturedError and expanded before serialization.
+// recorded for consumeLastCapturedError and reduced to a fixed event before logging.
+function safeLogArgument(value: unknown): string {
+  if (value instanceof Error) return describeError(value);
+  if (typeof value === "string") {
+    try {
+      const event = JSON.parse(value) as { event?: unknown; code?: unknown };
+      if (typeof event.event === "string" && /^[a-z0-9_.-]{1,100}$/.test(event.event)) {
+        return JSON.stringify({ event: event.event, ...(typeof event.code === "string" && /^[A-Z0-9_]{1,80}$/.test(event.code) ? { code: event.code } : {}) });
+      }
+    } catch { /* Unstructured context is not a diagnostic allowlist. */ }
+  }
+  return "APP_LOG_CONTEXT_REDACTED";
+}
 const originalConsoleError = console.error.bind(console);
 console.error = (...args: unknown[]) => {
   const expanded = args.map((arg) => {
-    if (!isErrorLike(arg)) return arg;
-    record(arg);
-    return describeError(arg);
+    if (isErrorLike(arg)) record(arg);
+    return safeLogArgument(arg);
   });
   originalConsoleError(...expanded);
 };

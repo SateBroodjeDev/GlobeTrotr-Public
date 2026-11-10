@@ -1,4 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { MarketingLink as Link } from "@/components/MarketingLink";
+import { marketingHead } from "@/lib/marketing-head";
+import { createFileRoute } from "@tanstack/react-router";
 import { ArrowRight, BriefcaseBusiness, Check, CircleAlert, Plane, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,22 +10,7 @@ import { useLocale } from "@/lib/locale";
 import { PLANS } from "@/lib/plans";
 import { portalUrl } from "@/lib/site-routing";
 export const Route = createFileRoute("/prijzen")({
-  head: () => ({
-    meta: [
-      { title: "Prijzen — GlobeTrotr" },
-      {
-        name: "description",
-        content:
-          "Vergelijk GlobeTrotr Free, Pro en Agency en kies wat bij jouw manier van reizen of werken past.",
-      },
-      { property: "og:title", content: "GlobeTrotr Free, Pro en Agency" },
-      {
-        property: "og:description",
-        content: "Vergelijk plannen op reizen, samenwerking, opslag en professioneel beheer.",
-      },
-    ],
-    links: [{ rel: "canonical", href: "https://globetrotr.nl/pricing" }],
-  }),
+  head: () => marketingHead("/pricing", "nl-NL"),
   component: PricingPage,
 });
 const copy = {

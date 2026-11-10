@@ -1,8 +1,10 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { signOutWithPushCleanup } from "@/lib/push-account";
+import { publicStatusUrl } from "@/lib/platform-status-link";
+import { useRouter, useRouterState } from "@tanstack/react-router";
+import { MarketingLink as Link } from "@/components/MarketingLink";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   BarChart3,
-  AlertTriangle,
   BookOpenText,
   ChevronDown,
   CreditCard,
@@ -54,16 +56,23 @@ import { NotificationPanel } from "@/components/NotificationPanel";
 import { PlatformStatusBanner } from "@/components/PlatformStatusBanner";
 import { useLocale } from "@/lib/locale";
 import { localizeTagline } from "@/lib/localized-values";
+import { BrandLogo } from "@/components/BrandLogo";
+import { PublicFooter } from "@/components/PublicFooter";
+import { PageContent } from "@/components/PageContent";
+import { PUBLIC_SOCIAL_PROFILES } from "@/lib/public-site-seo";
 import { openPrivacyChoices } from "@/lib/privacy-consent";
 import { getMyAgencyAccess } from "@/lib/agency.functions";
 import { getMaintenanceState } from "@/lib/maintenance.functions";
-import { portalUrl, publicSiteUrl } from "@/lib/site-routing";
+import { maintenanceQueryOptions } from "@/lib/maintenance-query";
+import { portalUrl, publicSiteUrl as canonicalPublicSiteUrl, publicWebsiteLayout } from "@/lib/site-routing";
+import { localizedMarketingPath, marketingPage } from "@/lib/marketing-locale";
 import { MaintenanceScreen } from "@/components/MaintenanceScreen";
 import { ScheduledMaintenanceNotice } from "@/components/ScheduledMaintenanceNotice";
 import { maintenanceAllowsPath } from "@/lib/maintenance";
 import { usePortalSessionSummary } from "@/lib/public-session";
 import { agencyHostLookup } from "@/lib/agency-domain";
 import { getPublicAgencyHostBranding, publicAgencyLogoUrl } from "@/lib/agency-host-branding";
+import { AgencyBrandingBoundary } from "@/components/AgencyBrandingBoundary";
 
 const CORE_NAV = [
   { to: "/dashboard", label: "Reizen", icon: Map },
@@ -75,7 +84,7 @@ const CLIENT_NAV = [
 ] as const;
 const SUPPORT_NAV = [
   { to: "/contact", label: "Contact", icon: Mail },
-  { to: "/status", label: "Status", icon: Activity },
+  { to: "https://status.globetrotr.nl/", label: "Status", icon: Activity },
 ] as const;
 const PUBLIC_NAV = [
   { to: "/", label: "Home", icon: Map },
@@ -96,7 +105,7 @@ const cachedTheme = (): ThemePreference => {
 };
 
 export function AppShell({ children }: { children: ReactNode }) {
-  return <AppShellContent>{children}</AppShellContent>;
+  return <AgencyBrandingBoundary><AppShellContent>{children}</AppShellContent></AgencyBrandingBoundary>;
 }
 
 function FooterMenu({ label, children }: { label: string; children: ReactNode }) {
@@ -130,8 +139,10 @@ function AppShellContent({ children }: { children: ReactNode }) {
     summary: portalSession,
     checked: portalSessionChecked,
   } = usePortalSessionSummary();
-  const { locale, setLocale, text } = useLocale();
+  const { locale, setLocale, text, languageReady } = useLocale();
+  const publicSiteUrl = (path: string) => canonicalPublicSiteUrl(localizedMarketingPath(path, locale));
   const pathname = useRouterState({ select: (routerState) => routerState.location.pathname });
+  const requestOrigin = useRouter().options.origin ?? (typeof window === "undefined" ? undefined : window.location.origin);
   const corporateAdmin = pathname.startsWith("/corporate-admin");
   const queryClient = useQueryClient();
   const [guestTheme, setGuestTheme] = useState<ThemePreference>(cachedTheme);
@@ -143,11 +154,13 @@ function AppShellContent({ children }: { children: ReactNode }) {
     typeof window === "undefined" ? "" : window.location.hostname.toLowerCase(),
   );
   const agencyHost = Boolean(hostname && agencyHostLookup(hostname));
+  const publicLayout = publicWebsiteLayout(requestOrigin, pathname);
   const hostBranding = useQuery({
     queryKey: ["public-agency-host-branding", hostname],
     queryFn: () => getPublicAgencyHostBranding(hostname),
     enabled: agencyHost,
     retry: false,
+    staleTime: 60_000,
   });
   const visibleBranding = hostBranding.data
     ? {
@@ -169,9 +182,9 @@ function AppShellContent({ children }: { children: ReactNode }) {
   const visibleAgencyLogo = hostBranding.data
     ? publicAgencyLogoUrl(hostBranding.data.logoPath)
     : agencyLogoUrl;
+  const usesPlatformBrand = !agencyHost && !visibleAgencyLogo && visibleBranding.brandName === "GlobeTrotr";
   const maintenance = useQuery({
-    queryKey: ["public-maintenance"],
-    queryFn: () => getMaintenanceState(),
+    ...maintenanceQueryOptions(() => getMaintenanceState()),
     refetchInterval: 10_000,
   });
   const agencyRefreshPending = useRef(false);
@@ -213,7 +226,7 @@ function AppShellContent({ children }: { children: ReactNode }) {
       ? cachedTheme()
       : asTheme(profileQuery.data?.theme)
     : guestTheme;
-  const navItems = authLoading
+  const navItems = publicLayout ? PUBLIC_NAV : authLoading
     ? []
     : user
       ? [
@@ -255,7 +268,7 @@ function AppShellContent({ children }: { children: ReactNode }) {
     try {
       await logoutGbt({
         prepare: () => prepareGbtLogout(),
-        signOut: () => supabase.auth.signOut(),
+        signOut: () => signOutWithPushCleanup(() => supabase.auth.signOut()),
         clear: () => queryClient.clear(),
         redirect: (url) => window.location.assign(url),
       });
@@ -265,7 +278,8 @@ function AppShellContent({ children }: { children: ReactNode }) {
   }
   useEffect(() => {
     document.documentElement.style.setProperty("--brand-hue", String(visibleBranding.accent));
-  }, [visibleBranding.accent]);
+    document.documentElement.dataset.platformBrand = corporateAdmin || usesPlatformBrand ? "globetrotr" : "agency";
+  }, [visibleBranding.accent, corporateAdmin, usesPlatformBrand]);
   useEffect(() => {
     if (agencyHost) document.title = `${visibleBranding.brandName} — Agency portal`;
   }, [agencyHost, pathname, visibleBranding.brandName]);
@@ -439,7 +453,7 @@ function AppShellContent({ children }: { children: ReactNode }) {
           </div>
         </header>
         {user && <PlatformStatusBanner userId={user.id} />}
-        <main className="mx-auto max-w-[1500px] px-4 py-6 lg:px-6 lg:py-8">{children}</main>
+        <PageContent routeKey={pathname} animate className="mx-auto max-w-[1500px] px-4 py-6 lg:px-6 lg:py-8">{children}</PageContent>
         <ScheduledMaintenanceNotice state={maintenance.data} />
       </div>
     );
@@ -455,8 +469,8 @@ function AppShellContent({ children }: { children: ReactNode }) {
           className="hidden"
         />
       )}
-      <header className="sticky top-0 z-30 border-b border-border/70 bg-background/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 sm:gap-x-6 sm:gap-y-3 sm:px-4 sm:py-3">
+      <header className={`sticky top-0 z-30 border-b border-border/70 bg-background/90 backdrop-blur ${publicLayout ? "public-site-header" : ""}`}>
+        <div className={publicLayout ? "mx-auto flex max-w-7xl items-center gap-2 px-3 py-3 sm:gap-4 sm:px-6" : "mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 sm:gap-x-6 sm:gap-y-3 sm:px-4 sm:py-3"}>
           <a
             href={agencyHost ? (user ? "/agency-admin" : "/auth") : publicSiteUrl("/")}
             className="flex min-w-0 flex-1 items-center gap-2 md:flex-none"
@@ -466,24 +480,21 @@ function AppShellContent({ children }: { children: ReactNode }) {
                 : text("Naar de publieke website", "Go to public website")
             }
           >
-            <img
-              src={
-                visibleAgencyLogo ??
-                (agencyHost ? "/assets/brand/agency-placeholder.svg" : "/assets/brand/logo.png")
-              }
-              alt={`${visibleBranding.brandName} logo`}
-              className="size-9 shrink-0 rounded-xl object-contain"
-            />
-            <span className="min-w-0 leading-tight">
-              <span className="block truncate font-display text-base font-semibold">
-                {visibleBranding.brandName}
-              </span>
-              <span className="block truncate text-[11px] text-muted-foreground">
-                {visibleBranding.domain}
-              </span>
-            </span>
+            {usesPlatformBrand ? <BrandLogo /> : (
+              <>
+                <img
+                  src={visibleAgencyLogo ?? (agencyHost ? "/assets/brand/agency-placeholder.svg" : "/assets/brand/logo.png")}
+                  alt={`${visibleBranding.brandName} logo`}
+                  className="size-9 shrink-0 rounded-xl object-contain"
+                />
+                <span className="min-w-0 leading-tight">
+                  <span className="block truncate font-display text-base font-semibold">{visibleBranding.brandName}</span>
+                  <span className="block truncate text-[11px] text-muted-foreground">{visibleBranding.domain}</span>
+                </span>
+              </>
+            )}
           </a>
-          {!sessionLoading && !sessionAuthenticated && (
+          {!publicLayout && !sessionLoading && !sessionAuthenticated && (
             <div className="order-2 flex w-full gap-2 lg:hidden">
               <Button asChild variant="outline" size="sm" className="min-h-10 flex-1">
                 <a href={agencyHost ? "/auth" : portalUrl("/auth")}>
@@ -497,37 +508,11 @@ function AppShellContent({ children }: { children: ReactNode }) {
               </Button>
             </div>
           )}
-          {publicHost && (
-            <div className="order-3 w-full md:hidden">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="min-h-11 w-full justify-between" aria-label={text("Open hoofdnavigatie", "Open main navigation")}>
-                    <span className="flex items-center gap-2"><Menu className="size-4" /> Menu</span>
-                    <ChevronDown className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
-                  {PUBLIC_NAV.map((item) => (
-                    <DropdownMenuItem asChild key={item.to} className="min-h-11">
-                      <Link to={item.to} aria-current={pathname === item.to ? "page" : undefined}>
-                        <item.icon className="size-4" />
-                        {item.to === "/for-travelers" ? text("Reizigers", "Travellers")
-                          : item.to === "/features" ? text("Mogelijkheden", "Features")
-                          : item.to === "/pricing" ? text("Prijzen", "Pricing") : item.label}
-                      </Link>
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuItem asChild className="min-h-11"><Link to="/for-groups"><Globe2 className="size-4" />{text("Groepsreizen", "Group travel")}</Link></DropdownMenuItem>
-                  <DropdownMenuItem asChild className="min-h-11"><Link to="/demo"><Compass className="size-4" />{text("Interactieve demo", "Interactive demo")}</Link></DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          )}
           <nav
             aria-label={text("Hoofdnavigatie", "Main navigation")}
-            className={`order-3 -mx-1 ${publicHost ? "hidden md:flex" : "flex"} w-[calc(100%+0.5rem)] gap-1 overflow-x-auto px-1 pb-0.5 overscroll-x-contain [scrollbar-width:none] md:order-none md:mx-0 md:w-auto md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden`}
+            className={publicLayout ? "hidden items-center gap-0.5 xl:flex" : "order-3 -mx-1 flex w-[calc(100%+0.5rem)] gap-1 overflow-x-auto px-1 pb-0.5 overscroll-x-contain [scrollbar-width:none] md:order-none md:mx-0 md:w-auto md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden"}
           >
-            {user && !agencyHost && (
+            {user && !agencyHost && !publicLayout && (
               <a
                 href={publicSiteUrl("/")}
                 className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:min-h-9"
@@ -537,7 +522,9 @@ function AppShellContent({ children }: { children: ReactNode }) {
               </a>
             )}
             {navItems.map((item) =>
-              user || (item.to !== "/" && item.to !== "/features" && item.to !== "/pricing") ? (
+              item.to === "https://status.globetrotr.nl/" ? (
+                <a key={item.to} href={publicStatusUrl(locale)} className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:min-h-9"><item.icon className="size-4" />{item.label}</a>
+              ) : user || (item.to !== "/" && item.to !== "/features" && item.to !== "/pricing") ? (
                 <Link
                   key={item.to}
                   to={item.to}
@@ -579,7 +566,7 @@ function AppShellContent({ children }: { children: ReactNode }) {
           <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
             {user && <NotificationPanel key={user.id} userId={user.id} />}
             {!sessionLoading && !sessionAuthenticated && (
-              <div className="hidden items-center gap-2 lg:flex">
+              <div className={publicLayout ? "hidden items-center gap-2 xl:flex" : "hidden items-center gap-2 lg:flex"}>
                 <Button asChild variant="ghost" size="sm">
                   <a href={agencyHost ? "/auth" : portalUrl("/auth")}>
                     {text("Inloggen", "Sign in")}
@@ -597,7 +584,7 @@ function AppShellContent({ children }: { children: ReactNode }) {
                 {text("Opslaan…", "Saving…")}
               </span>
             )}
-            {!sessionLoading && !sessionAuthenticated && (
+            {(marketingPage(pathname) || (!sessionLoading && !sessionAuthenticated)) && (
               <Button
                 type="button"
                 variant="ghost"
@@ -605,9 +592,12 @@ function AppShellContent({ children }: { children: ReactNode }) {
                 className="gap-1.5 px-2 font-semibold"
                 aria-label={text("Schakel naar Engels", "Switch to Dutch")}
                 title={locale === "nl-NL" ? "English" : "Nederlands"}
-                onClick={() => void setLocale(locale === "nl-NL" ? "en-GB" : "nl-NL")}
+                disabled={!languageReady}
+                onClick={() => void setLocale(locale === "nl-NL" ? "en-GB" : "nl-NL").catch(() => {
+                  toast.error(text("Taal opslaan is niet gelukt. Probeer het opnieuw.", "Could not save your language. Please try again."));
+                })}
               >
-                <Languages className="size-4" />
+                <Languages className={publicLayout ? "hidden size-4 min-[380px]:block" : "size-4"} />
                 <span>{locale === "nl-NL" ? "EN" : "NL"}</span>
               </Button>
             )}
@@ -615,8 +605,9 @@ function AppShellContent({ children }: { children: ReactNode }) {
               type="button"
               variant="ghost"
               size="icon"
-              aria-label={dark ? "Schakel lichte modus in" : "Schakel donkere modus in"}
-              title={dark ? "Lichte modus" : "Donkere modus"}
+              className={publicLayout ? "hidden sm:inline-flex" : undefined}
+              aria-label={dark ? text("Schakel lichte modus in", "Switch to light mode") : text("Schakel donkere modus in", "Switch to dark mode")}
+              title={dark ? text("Lichte modus", "Light mode") : text("Donkere modus", "Dark mode")}
               onClick={() => void toggleTheme()}
             >
               {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
@@ -629,7 +620,7 @@ function AppShellContent({ children }: { children: ReactNode }) {
                 disabled
                 aria-label={text("Sessie laden", "Loading session")}
               >
-                <UserRound className="size-5 animate-pulse" />
+                <UserRound className={publicLayout ? "size-5 text-muted-foreground" : "size-5 animate-pulse"} />
               </Button>
             ) : user ? (
               <DropdownMenu>
@@ -639,7 +630,7 @@ function AppShellContent({ children }: { children: ReactNode }) {
                     variant="ghost"
                     size="icon"
                     className="rounded-full"
-                    aria-label="Accountmenu"
+                    aria-label={text("Accountmenu", "Account menu")}
                   >
                     <Avatar className="size-8">
                       <AvatarImage src={visibleAvatarUrl} />
@@ -713,7 +704,7 @@ function AppShellContent({ children }: { children: ReactNode }) {
             ) : (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="ghost" size="icon" aria-label="Accountmenu">
+                  <Button type="button" variant="ghost" size="icon" aria-label={text("Accountmenu", "Account menu")}>
                     <UserRound className="size-5" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -731,18 +722,41 @@ function AppShellContent({ children }: { children: ReactNode }) {
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
+            {publicLayout && <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="ghost" size="icon" className="xl:hidden" aria-label={text("Open hoofdnavigatie", "Open main navigation")}><Menu className="size-5" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="public-mobile-menu w-72 max-w-[calc(100vw-1.5rem)] p-2">
+                <DropdownMenuLabel>{text("Ontdek GlobeTrotr", "Explore GlobeTrotr")}</DropdownMenuLabel>
+                {[...PUBLIC_NAV, { to: "/for-groups", label: text("Groepsreizen", "Group travel"), icon: Globe2 }, { to: "/demo", label: text("Interactieve demo", "Interactive demo"), icon: Compass }].map((item) => <DropdownMenuItem asChild key={item.to} className="min-h-11 rounded-lg"><Link to={item.to} aria-current={pathname === localizedMarketingPath(item.to, locale) ? "page" : undefined}><item.icon className="size-4" />{item.to === "/for-travelers" ? text("Reizigers", "Travellers") : item.to === "/features" ? text("Mogelijkheden", "Features") : item.to === "/pricing" ? text("Prijzen", "Pricing") : item.label}</Link></DropdownMenuItem>)}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="min-h-11 sm:hidden" onSelect={() => void toggleTheme()}>{dark ? <Sun className="size-4" /> : <Moon className="size-4" />}{dark ? text("Lichte modus", "Light mode") : text("Donkere modus", "Dark mode")}</DropdownMenuItem>
+                {sessionLoading ? <DropdownMenuItem disabled>{text("Sessie laden…", "Loading session…")}</DropdownMenuItem> : sessionAuthenticated ? <DropdownMenuItem asChild className="min-h-11"><a href={portalUrl("/dashboard")}><Map className="size-4" />{text("Open mijn reizen", "Open my trips")}</a></DropdownMenuItem> : <>
+                  <DropdownMenuItem asChild className="min-h-11"><a href={portalUrl("/auth")}><LogIn className="size-4" />{text("Inloggen", "Sign in")}</a></DropdownMenuItem>
+                  <DropdownMenuItem asChild className="min-h-11 rounded-lg bg-primary text-primary-foreground focus:bg-primary/90 focus:text-primary-foreground"><a href={portalUrl("/register")}>{text("Gratis beginnen", "Start for free")}</a></DropdownMenuItem>
+                </>}
+              </DropdownMenuContent>
+            </DropdownMenu>}
           </div>
         </div>
       </header>
       {user && <PlatformStatusBanner userId={user.id} />}
-      <main className="mx-auto max-w-7xl px-3 py-5 sm:px-4 sm:py-8">
+      <PageContent routeKey={pathname} animate={!publicLayout} className="mx-auto max-w-7xl px-3 py-5 sm:px-4 sm:py-8">
         {children}
-      </main>
+      </PageContent>
       <ScheduledMaintenanceNotice state={maintenance.data} />
-      <footer className="mx-auto flex max-w-7xl flex-col gap-3 px-4 pb-10 pt-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+      {publicLayout ? <PublicFooter tagline={localizeTagline(visibleBranding.tagline, locale)} /> : <footer className="mx-auto flex max-w-7xl flex-col gap-3 px-4 pb-10 pt-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
         <p>
           {visibleBranding.brandName} — {localizeTagline(visibleBranding.tagline, locale)}
         </p>
+        {!agencyHost && (
+          <nav aria-label={text("Volg GlobeTrotr", "Follow GlobeTrotr")} className="mt-1 flex flex-wrap items-center gap-x-4">
+            <a href={PUBLIC_SOCIAL_PROFILES.instagram} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center rounded-sm font-medium underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={text("GlobeTrotrApp op Instagram (opent in een nieuw tabblad)", "GlobeTrotrApp on Instagram (opens in a new tab)")}>Instagram <span className="ml-1 text-muted-foreground">@GlobeTrotrApp</span></a>
+            <a href={PUBLIC_SOCIAL_PROFILES.tiktok} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center rounded-sm font-medium underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={text("GlobeTrotrApp op TikTok (opent in een nieuw tabblad)", "GlobeTrotrApp on TikTok (opens in a new tab)")}>TikTok <span className="ml-1 text-muted-foreground">@GlobeTrotrApp</span></a>
+          </nav>
+        )}
+        </div>
         {!agencyHost && (
           <nav
             aria-label={text("Voetnavigatie", "Footer navigation")}
@@ -797,13 +811,7 @@ function AppShellContent({ children }: { children: ReactNode }) {
                 </a>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <a href={publicSiteUrl("/known-issues")}>
-                  <AlertTriangle className="size-4" />
-                  {text("Bekende problemen", "Known issues")}
-                </a>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <a href={publicSiteUrl("/status")}>
+                <a href={publicStatusUrl(locale)}>
                   <Activity className="size-4" />
                   Status
                 </a>
@@ -851,7 +859,7 @@ function AppShellContent({ children }: { children: ReactNode }) {
             </span>
           </nav>
         )}
-      </footer>
+      </footer>}
     </div>
   );
 }

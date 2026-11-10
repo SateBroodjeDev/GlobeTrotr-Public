@@ -17,8 +17,10 @@ export function encryptSecret(value: string) {
 
 export function decryptSecret(value: string) {
   const [version, iv, tag, encrypted] = value.split(".");
+  if (!/^v1\.[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]+$/.test(value)) throw new Error("ENCRYPTED_SECRET_INVALID");
+  if (Buffer.from(tag, "base64url").toString("base64url") !== tag || Buffer.from(encrypted, "base64url").toString("base64url") !== encrypted) throw new Error("ENCRYPTED_SECRET_INVALID");
   if (version !== "v1" || !iv || !tag || !encrypted) throw new Error("ENCRYPTED_SECRET_INVALID");
-  const decipher = createDecipheriv("aes-256-gcm", key(), Buffer.from(iv, "base64url"));
+  const decipher = createDecipheriv("aes-256-gcm", key(), Buffer.from(iv, "base64url"), { authTagLength: 16 });
   decipher.setAuthTag(Buffer.from(tag, "base64url"));
   return Buffer.concat([
     decipher.update(Buffer.from(encrypted, "base64url")),

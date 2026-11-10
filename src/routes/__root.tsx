@@ -19,9 +19,13 @@ import { LocaleProvider } from "@/lib/locale";
 import { PrivacyChoices } from "@/components/PrivacyChoices";
 import { PrivacySync } from "@/components/PrivacySync";
 import { Analytics } from "@/components/Analytics";
+import { PublicPerformance } from "@/components/PublicPerformance";
 import { BetaFeedbackButton } from "@/components/BetaFeedbackButton";
 import { canonicalSiteLocation, publicSiteUrl } from "@/lib/site-routing";
 import "leaflet/dist/leaflet.css";
+import { GLOBETROTR_SLOGAN } from "@/lib/branding";
+import { PUBLIC_SITE_SEO } from "@/lib/public-site-seo";
+import { marketingPageForOrigin } from "@/lib/marketing-locale";
 import { agencyHostLookup } from "@/lib/agency-domain";
 
 function NotFoundComponent() {
@@ -113,17 +117,25 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:title", content: "GlobeTrotr — Samen reizen plannen zonder chaos" },
       {
         property: "og:description",
-        content: "Plan elke reis ter wereld en verantwoord elke euro.",
+        content: GLOBETROTR_SLOGAN.nl,
       },
       { property: "og:type", content: "website" },
       { property: "og:site_name", content: "GlobeTrotr" },
       { property: "og:locale", content: "nl_NL" },
+      { property: "og:image", content: PUBLIC_SITE_SEO.image },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { property: "og:image:alt", content: PUBLIC_SITE_SEO.imageAlt },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:image", content: PUBLIC_SITE_SEO.image },
+      { name: "twitter:image:alt", content: PUBLIC_SITE_SEO.imageAlt },
       { name: "theme-color", content: "#0f766e" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", type: "image/png", href: "/favicon.png" },
+      { rel: "icon", type: "image/png", sizes: "96x96", href: "/favicon.png?v=20261019" },
+      { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
+      { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
       { rel: "manifest", href: "/manifest.webmanifest" },
     ],
   }),
@@ -134,10 +146,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: ReactNode }) {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const origin = useRouter().options.origin ?? (typeof window === "undefined" ? undefined : window.location.origin);
   return (
-    <html lang="nl">
+    <html lang={marketingPageForOrigin(pathname, origin)?.locale === "en-GB" ? "en" : "nl"}>
       <head>
         <script
+          nonce={useRouter().options.ssr?.nonce}
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var t=localStorage.getItem("globetrotr.theme");var d=t==="dark"||(t!=="light"&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d);document.documentElement.style.colorScheme=d?"dark":"light"}catch(e){}})();`,
           }}
@@ -155,6 +170,7 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const origin = useRouter().options.origin ?? (typeof window === "undefined" ? undefined : window.location.origin);
   const sessionBridge = pathname === "/session-bridge";
   const [agencyHost, setAgencyHost] = useState(false);
   useEffect(() => {
@@ -164,7 +180,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <LocaleProvider>
+        <LocaleProvider urlLocale={marketingPageForOrigin(pathname, origin)?.locale}>
           <WorkspaceProvider>
             <CanonicalOrigin>
               {sessionBridge ? (
@@ -175,7 +191,7 @@ function RootComponent() {
                   <Outlet />
                 </AppShell>
               )}
-              {!sessionBridge && <PrivacySync><PrivacyChoices /><Analytics /></PrivacySync>}
+              {!sessionBridge && <PrivacySync><PrivacyChoices /><Analytics /><PublicPerformance /></PrivacySync>}
               {!sessionBridge && !agencyHost && <BetaFeedbackButton />}
             </CanonicalOrigin>
           </WorkspaceProvider>

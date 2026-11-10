@@ -1,51 +1,45 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { MarketingLink as Link } from "@/components/MarketingLink";
+import { MarketingMotion } from "@/components/MarketingMotion";
+import { MarketingClosing } from "@/components/MarketingClosing";
+import { FeatureIllustration } from "@/components/FeatureIllustration";
+import { marketingHead } from "@/lib/marketing-head";
+import { createFileRoute } from "@tanstack/react-router";
 import {
   ArrowRight,
   BellRing,
   BookHeart,
-  BookOpenCheck,
-  BriefcaseBusiness,
   CalendarRange,
   Check,
-  FileDown,
   FileInput,
   GitCompareArrows,
   Globe2,
-  ListChecks,
   LocateFixed,
   MapPinned,
   Plane,
-  ReceiptText,
   Share2,
   ShieldCheck,
-  Users,
   UserRound,
+  Users,
   WalletCards,
   Waypoints,
   WifiOff,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion";
 import { useAuth } from "@/lib/auth";
 import { useLocale } from "@/lib/locale";
 import { portalUrl } from "@/lib/site-routing";
-
 export const Route = createFileRoute("/mogelijkheden")({
-  head: () => ({
-    meta: [
-      { title: "Mogelijkheden — GlobeTrotr" },
-      {
-        name: "description",
-        content:
-          "Ontdek routes, planning, boekingen, uitgaven, samenwerking en openbare reisverhalen in GlobeTrotr.",
-      },
-    ],
-    links: [{ rel: "canonical", href: "https://globetrotr.nl/features" }],
-  }),
+  head: () => marketingHead("/features", "nl-NL"),
   component: FeaturesPage,
 });
-
 const PHASES = [
   {
     icon: MapPinned,
@@ -232,397 +226,187 @@ const CAPABILITIES = [
   },
 ] as const;
 
-const FREE_FEATURES = [
-  ["Twee actieve reizen", "Two active trips"],
-  ["Route, dagplanning, boekingen en uitgaven", "Route, itinerary, bookings and expenses"],
-  [
-    "Samenwerken, verrekenen, vergelijken en stemmen",
-    "Collaboration, settlement, comparison and voting",
-  ],
-  ["Persoonlijke en gezamenlijke paklijsten", "Personal and shared packing lists"],
-  [
-    "Openbaar profiel, bezochte landen en vrienden",
-    "Public profile, visited countries and friends",
-  ],
-  ["Reisdagboek met foto's, samenvatting en PDF", "Travel journal with photos, summary and PDF"],
-  [
-    "Openbare live terugblik met bevestigde e-mailvolgers",
-    "Public live story with confirmed email followers",
-  ],
-  [
-    "Offline overzicht en gecontroleerde synchronisatie",
-    "Offline overview and controlled synchronisation",
-  ],
-  ["CSV-, JSON-, GPX- en ICS-export", "CSV, JSON, GPX and ICS export"],
-] as const;
-
-const PRO_FEATURES = [
-  ["Onbeperkt actieve reizen", "Unlimited active trips"],
-  ["Alles uit Free", "Everything in Free"],
-  ["Live weer per bestemming", "Live weather for each destination"],
-  ["Dertig vluchtcontroles per gebruiker per dag", "Thirty flight checks per user per day"],
-  [
-    "Tweehonderdvijftig routeaanvragen per gebruiker per dag",
-    "Two hundred and fifty routing requests per user per day",
-  ],
-  ["PDF-declaratie van uitgaven", "PDF expense report"],
-  [
-    "Persoonlijke live agendalink voor de reiseigenaar",
-    "Personal live calendar link for the trip owner",
-  ],
-] as const;
-
-const AGENCY_FEATURES = [
-  [
-    "Alle Pro-reisfuncties; geen openbaar reizigersprofiel",
-    "All Pro trip features; no public traveller profile",
-  ],
-  ["Klanten, offertes, taken en leveranciers", "Clients, quotes, tasks and suppliers"],
-  ["Teamrollen en zakelijke rechten", "Team roles and business permissions"],
-  [
-    "Eigen branding, Agency-subdomein en geverifieerd domein",
-    "Custom branding, Agency subdomain and verified domain",
-  ],
-  ["Eigen SMTP en merkgebonden klantcommunicatie", "Custom SMTP and branded client communication"],
+const PHASE_LABELS = [
+  ["Route", "Route"],
+  ["Dagplanning", "Itinerary"],
+  ["Boekingen", "Bookings"],
+  ["Uitgaven", "Expenses"],
+  ["Samenwerken", "Together"],
+  ["Dagboek", "Journal"],
 ] as const;
 
 export function FeaturesPage() {
   const { user } = useAuth();
   const { text } = useLocale();
   return (
-    <div className="marketing-page features-page space-y-10 pb-8 sm:space-y-16">
-      <header className="marketing-hero border-b py-8 sm:py-12 lg:py-16">
-        <div className="max-w-4xl">
-          <div>
-            <Badge variant="secondary" className="mb-5 gap-1.5">
-              <Globe2 className="size-3.5" />{" "}
-              {text("Van plannen tot thuiskomen", "From planning to coming home")}
-            </Badge>
-            <h1 className="font-display text-3xl font-semibold leading-tight sm:text-5xl">
-              {text(
-                "Alles wat je reis nodig heeft. Eindelijk bij elkaar.",
-                "Everything your trip needs. Finally together.",
-              )}
-            </h1>
-            <p className="mt-5 max-w-xl text-base leading-relaxed opacity-90">
-              {text(
-                "GlobeTrotr vervangt de losse spreadsheet, chatberichten en screenshots door één levend reisoverzicht voor de hele groep.",
-                "GlobeTrotr replaces scattered spreadsheets, chat messages and screenshots with one living trip overview for the whole group.",
-              )}
-            </p>
-            <Button asChild size="lg" className="mt-7 w-full sm:w-auto">
+    <MarketingMotion className="marketing-page features-page space-y-12 pb-8 sm:space-y-16">
+      <section className="marketing-hero features-hero grid items-center gap-8 rounded-3xl p-5 sm:p-9 lg:grid-cols-[1.1fr_1fr] lg:gap-12 lg:p-12">
+        <div>
+          <Badge variant="secondary" className="gap-1.5">
+            <Globe2 className="size-3.5" />
+            {text("Van plannen tot thuiskomen", "From planning to coming home")}
+          </Badge>
+          <h1 className="mt-5 max-w-2xl font-display text-3xl font-semibold leading-tight sm:text-5xl">
+            {text(
+              "Alles wat je reis nodig heeft. Eindelijk bij elkaar.",
+              "Everything your trip needs. Finally together.",
+            )}
+          </h1>
+          <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground">
+            {text(
+              "Van je eerste bestemming tot de laatste gedeelde rekening. Ontdek wat je kunt regelen, op jouw manier.",
+              "From your first destination to the final shared expense. Explore what you can organise, your way.",
+            )}
+          </p>
+          <div className="mt-7 flex flex-wrap gap-3">
+            <Button asChild size="lg">
               <a href={portalUrl(user ? "/dashboard" : "/register")}>
                 {user
                   ? text("Open mijn reizen", "Open my trips")
-                  : text("Probeer GlobeTrotr gratis", "Try GlobeTrotr free")}
+                  : text("Start gratis", "Start for free")}
                 <ArrowRight className="size-4" />
               </a>
             </Button>
+            <Button asChild size="lg" variant="outline">
+              <Link to="/demo">{text("Probeer de demo", "Try the demo")}</Link>
+            </Button>
           </div>
         </div>
-      </header>
+        <div className="hidden lg:block">
+          <FeatureIllustration phase={5} />
+        </div>
+      </section>
 
-      <section>
-        <div className="mx-auto max-w-2xl text-center">
-          <p className="text-xs font-semibold uppercase tracking-[.2em] text-primary">
-            {text("De hele reiscyclus", "The complete trip lifecycle")}
+      <section id="ontdek" className="space-y-6 scroll-mt-24">
+        <div className="max-w-2xl">
+          <p className="text-xs font-semibold uppercase tracking-widest text-primary">
+            {text("Kies wat je wilt ontdekken", "Choose what to explore")}
           </p>
           <h2 className="mt-3 font-display text-3xl font-semibold sm:text-4xl">
-            {text(
-              "Van eerste prik op de kaart tot de laatste terugbetaling",
-              "From the first map pin to the final repayment",
-            )}
+            {text("Een plek voor ieder deel van je reis", "A place for every part of your trip")}
           </h2>
         </div>
-        <div className="marketing-phases mt-10 grid gap-x-12 gap-y-8 lg:grid-cols-2">
+        <Tabs defaultValue="0" className="feature-explorer">
+          <TabsList
+            aria-label={text("Onderdelen van de reisplanner", "Trip planner features")}
+            className="grid h-auto w-full grid-cols-2 gap-2 bg-transparent p-0 sm:grid-cols-3 lg:grid-cols-6"
+          >
+            {PHASES.map(({ icon: Icon }, index) => (
+              <TabsTrigger
+                key={index}
+                value={String(index)}
+                className="feature-tab min-h-14 gap-2 whitespace-normal border bg-card px-3 py-3 text-center data-[state=active]:border-primary data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+              >
+                <Icon className="size-4 shrink-0" />
+                {text(PHASE_LABELS[index]![0], PHASE_LABELS[index]![1])}
+              </TabsTrigger>
+            ))}
+          </TabsList>
           {PHASES.map(({ icon: Icon, title, copy, points }, index) => (
-            <Card key={title[0]} className="marketing-editorial-card overflow-hidden">
-              <CardContent className="grid gap-5 p-6 sm:grid-cols-[auto_1fr]">
-                <span className="grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary">
-                  <Icon className="size-6" />
-                </span>
+            <TabsContent
+              key={index}
+              value={String(index)}
+              forceMount
+              className="mt-5 data-[state=inactive]:hidden"
+            >
+              <div className="grid items-center gap-6 rounded-3xl border bg-card p-5 sm:p-8 lg:grid-cols-2 lg:gap-10">
                 <div>
-                  <p className="text-xs font-semibold text-primary">0{index + 1}</p>
-                  <h3 className="mt-1 font-display text-xl font-semibold">
+                  <span className={`feature-icon feature-tone-${index % 3}`}>
+                    <Icon className="size-6" />
+                  </span>
+                  <h3 className="mt-5 max-w-lg font-display text-2xl font-semibold sm:text-3xl">
                     {text(title[0], title[1])}
                   </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  <p className="mt-4 max-w-xl text-sm leading-7 text-muted-foreground">
                     {text(copy[0], copy[1])}
                   </p>
-                  <ul className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
+                  <ul className="mt-5 space-y-3 text-sm">
                     {points.map((point) => (
-                      <li key={point[0]} className="flex gap-2">
-                        <Check className="size-3.5 shrink-0 text-primary" />
+                      <li key={point[0]} className="flex items-start gap-2">
+                        <Check className="mt-0.5 size-4 shrink-0 text-primary" />
                         {text(point[0], point[1])}
                       </li>
                     ))}
                   </ul>
                 </div>
-              </CardContent>
-            </Card>
+                <FeatureIllustration phase={index} />
+              </div>
+            </TabsContent>
           ))}
-        </div>
+        </Tabs>
       </section>
 
-      <section className="rounded-3xl border bg-muted/20 p-6 sm:p-10">
-        <div className="mx-auto max-w-3xl text-center">
-          <p className="text-xs font-semibold uppercase tracking-[.2em] text-primary">
-            {text("Free, Pro of Agency", "Free, Pro or Agency")}
+      <section className="space-y-6">
+        <div className="max-w-2xl">
+          <p className="text-xs font-semibold uppercase tracking-widest text-primary">
+            {text("Ook aan gedacht", "The details, covered")}
           </p>
           <h2 className="mt-3 font-display text-3xl font-semibold">
             {text(
-              "Van eigen reis tot professioneel klantportaal",
-              "From personal trip to professional client portal",
-            )}
-          </h2>
-          <p className="mt-3 text-sm text-muted-foreground">
-            {text(
-              "Free bevat de complete planner, Pro haalt de reislimiet weg en Agency voegt het zakelijke klantportaal met eigen merk, domein en communicatie toe.",
-              "Free contains the complete planner, Pro removes the trip limit and Agency adds the professional client portal with custom branding, domains and communication.",
-            )}
-          </p>
-        </div>
-        <div className="mt-8 grid gap-5 lg:grid-cols-3">
-          <PlanFeatures icon={Plane} name="Free" price="€0" items={FREE_FEATURES} text={text} />
-          <PlanFeatures
-            icon={Users}
-            name="Pro"
-            price="€9 / maand"
-            priceEn="€9 / month"
-            items={PRO_FEATURES}
-            text={text}
-            featured
-          />
-          <PlanFeatures
-            icon={BriefcaseBusiness}
-            name="Agency"
-            price="€29 / maand"
-            priceEn="€29 / month"
-            items={AGENCY_FEATURES}
-            text={text}
-          />
-        </div>
-        <div className="mt-6 text-center">
-          <Button asChild variant="outline">
-            <Link to="/pricing">
-              {text("Bekijk de volledige vergelijking", "View the full comparison")}
-              <ArrowRight className="size-4" />
-            </Link>
-          </Button>
-        </div>
-      </section>
-
-      <section>
-        <div className="mx-auto max-w-3xl text-center">
-          <p className="text-xs font-semibold uppercase tracking-[.2em] text-primary">
-            {text("Meer dan de basis", "Beyond the basics")}
-          </p>
-          <h2 className="mt-3 font-display text-3xl font-semibold sm:text-4xl">
-            {text(
-              "Ook de lastige stukken van een reis geregeld",
-              "The complicated parts of a trip, handled too",
+              "Meer mogelijkheden, als jij ze nodig hebt",
+              "More possibilities, when you need them",
             )}
           </h2>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
             {text(
-              "Kies de onderdelen die bij jouw reis passen: plannen, samenwerken, onderweg overzicht houden en herinneringen bewaren.",
-              "Choose the parts that suit your trip: planning, collaborating, staying organised on the road and keeping memories.",
+              "Open een onderwerp voor de details. Van offline gebruik tot vluchtupdates en je eigen reisprofiel.",
+              "Open a topic for the details. From offline use to flight updates and your own travel profile.",
             )}
           </p>
         </div>
-        <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {CAPABILITIES.map(({ icon: Icon, title, copy, badge }) => (
-            <Card key={title[0]} className="marketing-editorial-card">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between gap-3">
-                  <span className="grid size-11 place-items-center rounded-2xl bg-primary/10 text-primary">
-                    <Icon className="size-5" />
-                  </span>
-                  <Badge variant="outline">{text(badge[0], badge[1])}</Badge>
-                </div>
-                <h3 className="mt-5 font-display text-xl font-semibold">
+        <Accordion type="multiple" className="grid items-start gap-3 md:grid-cols-2">
+          {CAPABILITIES.map(({ icon: Icon, title, copy, badge }, index) => (
+            <AccordionItem
+              key={title[0]}
+              value={String(index)}
+              className="rounded-2xl border bg-card px-4 sm:px-5"
+            >
+              <AccordionTrigger className="min-h-24 gap-3 py-4 text-left hover:no-underline">
+                <span className={`feature-icon shrink-0 feature-tone-${index % 3}`}>
+                  <Icon className="size-5" />
+                </span>
+                <span className="flex-1 text-sm font-semibold leading-relaxed">
                   {text(title[0], title[1])}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  {text(copy[0], copy[1])}
-                </p>
-              </CardContent>
-            </Card>
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="pb-5">
+                <p className="text-sm leading-7 text-muted-foreground">{text(copy[0], copy[1])}</p>
+                <p className="mt-4 text-xs font-medium text-primary">{text(badge[0], badge[1])}</p>
+              </AccordionContent>
+            </AccordionItem>
           ))}
-        </div>
+        </Accordion>
       </section>
 
-      <section className="rounded-3xl border border-border bg-muted/20 p-6 sm:p-10">
-        <div className="grid gap-9 lg:grid-cols-[.8fr_1.2fr]">
-          <div>
-            <Badge variant="outline">{text("Voor onderweg", "For the road")}</Badge>
-            <h2 className="mt-4 font-display text-3xl font-semibold">
-              {text(
-                "Je belangrijkste informatie ook op je telefoon",
-                "Your essential information on your phone",
-              )}
-            </h2>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              {text(
-                "Open je dagplanning, controleer een boeking, vink je paklijst af, voeg een uitgave toe of leg meteen een herinnering vast.",
-                "Open today's itinerary, check a booking, tick your packing list, add an expense or capture a memory immediately.",
-              )}
-            </p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {[
-              [
-                ListChecks,
-                text("Paklijst per persoon en samen", "Personal and shared packing lists"),
-              ],
-              [
-                ReceiptText,
-                text("Uitgaven en verdeling per persoon", "Expenses and split per person"),
-              ],
-              [BookOpenCheck, text("Printbare reisgids", "Printable trip guide")],
-              [
-                FileDown,
-                text("CSV-, dagboek-PDF- en JSON-export", "CSV, journal PDF and JSON export"),
-              ],
-            ].map(([Icon, label]) => (
-              <div
-                key={String(label)}
-                className="flex items-center gap-3 rounded-2xl border bg-background p-4"
-              >
-                <Icon className="size-5 text-primary" />
-                <span className="text-sm font-medium">{label as string}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section>
-        <div className="text-center">
-          <h2 className="font-display text-3xl font-semibold">
-            {text("Gemaakt voor jullie manier van reizen", "Made for the way you travel")}
+      <section className="feature-plan-note flex flex-col gap-5 rounded-3xl border p-6 sm:p-8 lg:flex-row lg:items-center lg:justify-between">
+        <div className="max-w-2xl">
+          <h2 className="font-display text-2xl font-semibold">
+            {text(
+              "Begin met Free. Groei als je meer nodig hebt.",
+              "Start with Free. Grow when you need more.",
+            )}
           </h2>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+            {text(
+              "Twee actieve reizen en samen plannen zijn inbegrepen. Pro voegt onder meer onbeperkt reizen en live weer toe. Agency is voor professioneel klantbeheer.",
+              "Two active trips and planning together are included. Pro adds unlimited trips and live weather, among other extras. Agency is for professional client management.",
+            )}
+          </p>
         </div>
-        <div className="mx-auto mt-7 grid max-w-6xl gap-4 md:grid-cols-3">
-          <Audience
-            icon={Users}
-            title={text("Vrienden, koppels en families", "Friends, couples and families")}
-            body={text(
-              "Plan samen, voorkom betaalverzoeken-chaos en geef iedereen hetzelfde actuele overzicht.",
-              "Plan together, avoid payment-request chaos and give everyone the same current overview.",
-            )}
-          />
-          <Audience
-            icon={Globe2}
-            title={text("Solo en meerdere reizen", "Solo and multiple trips")}
-            body={text(
-              "Bewaar komende, huidige en gearchiveerde reizen naast elkaar in één persoonlijk dashboard.",
-              "Keep upcoming, current and archived trips together in one personal dashboard.",
-            )}
-          />
-          <Audience
-            icon={BriefcaseBusiness}
-            title={text("Reisadviseurs en organisaties", "Travel advisers and organisations")}
-            body={text(
-              "Werk met klanten, teamrechten, eigen branding, domeinen, formulieren en zakelijke e-mail vanuit één Agency-omgeving.",
-              "Work with clients, team permissions, custom branding, domains, forms and business email from one Agency workspace.",
-            )}
-          />
-        </div>
-        <p className="mt-5 text-center text-sm text-muted-foreground">
-          <Link to="/for-agencies" className="text-primary underline">
-            {text("Bekijk alle Agency-mogelijkheden.", "View all Agency capabilities.")}
+        <Button asChild variant="outline" className="shrink-0 self-start lg:self-auto">
+          <Link to="/pricing">
+            {text("Vergelijk de abonnementen", "Compare plans")}
+            <ArrowRight className="size-4" />
           </Link>
-        </p>
+        </Button>
       </section>
-
-      <section className="marketing-invitation px-6 py-11 text-center sm:p-14">
-        <ShieldCheck className="mx-auto size-8 text-primary" />
-        <h2 className="mt-4 font-display text-3xl font-semibold">
-          {text("Begin met een echte reis", "Start with a real trip")}
-        </h2>
-        <p className="mx-auto mt-3 max-w-xl text-sm opacity-85">
-          {text(
-            "Je kunt gratis starten. Reizen blijven privé totdat jij bewust delen inschakelt.",
-            "You can start for free. Trips remain private until you intentionally enable sharing.",
-          )}
-        </p>
-        <div className="mt-7 flex flex-wrap justify-center gap-3">
-          <Button asChild size="lg">
-            <a href={portalUrl(user ? "/dashboard" : "/register")}>
-              {user
-                ? text("Naar mijn dashboard", "Go to my dashboard")
-                : text("Account maken", "Create account")}
-              <ArrowRight className="size-4" />
-            </a>
-          </Button>
-          <Button asChild variant="outline" size="lg">
-            <Link to="/demo">{text("Probeer het zelf", "Try it yourself")}</Link>
-          </Button>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function Audience({
-  icon: Icon,
-  title,
-  body,
-}: {
-  icon: typeof Users;
-  title: string;
-  body: string;
-}) {
-  return (
-    <Card className="marketing-editorial-card">
-      <CardContent className="p-6">
-        <Icon className="size-6 text-primary" />
-        <h3 className="mt-4 font-display text-lg font-semibold">{title}</h3>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function PlanFeatures({
-  icon: Icon,
-  name,
-  price,
-  priceEn,
-  items,
-  text,
-  featured = false,
-}: {
-  icon: typeof Users;
-  name: string;
-  price: string;
-  priceEn?: string;
-  items: ReadonlyArray<readonly [string, string]>;
-  text: (nl: string, en: string) => string;
-  featured?: boolean;
-}) {
-  return (
-    <Card className={featured ? "border-primary ring-1 ring-primary/20" : "surface"}>
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between gap-3">
-          <span className="flex items-center gap-2 font-display text-2xl font-semibold">
-            <Icon className="size-6 text-primary" />
-            {name}
-          </span>
-          <Badge variant={featured ? "default" : "secondary"}>
-            {text(price, priceEn ?? price)}
-          </Badge>
-        </div>
-        <ul className="mt-5 space-y-3 text-sm">
-          {items.map((item) => (
-            <li key={item[0]} className="flex gap-2">
-              <Check className="mt-0.5 size-4 shrink-0 text-primary" />
-              {text(item[0], item[1])}
-            </li>
-          ))}
-        </ul>
-      </CardContent>
-    </Card>
+      <MarketingClosing
+        title={["Wat wordt jouw volgende bestemming?", "Where will you go next?"]}
+        description={[
+          "Maak je eerste reis en nodig je reisgenoten uit. Je kunt gratis beginnen.",
+          "Create your first trip and invite your fellow travellers. You can start for free.",
+        ]}
+      />
+    </MarketingMotion>
   );
 }

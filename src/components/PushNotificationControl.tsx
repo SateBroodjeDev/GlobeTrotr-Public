@@ -1,3 +1,5 @@
+import { bindBrowserPushAccount } from "@/lib/push-account";
+import { useAuth } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { BellRing, BellOff, Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
@@ -18,6 +20,7 @@ function decodeKey(value: string) {
 
 export function PushNotificationControl() {
   const { text } = useLocale();
+  const { user } = useAuth();
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(true);
   const [configured, setConfigured] = useState(false);
@@ -83,8 +86,13 @@ export function PushNotificationControl() {
       setConfigured(true);
       const permission = await Notification.requestPermission();
       if (permission !== "granted") throw new Error("PUSH_PERMISSION_DENIED");
+      // A browser subscription retained from a different account must not be
+      // reassigned in place: queued notifications still refer to the old actor.
+      if (current && !status.endpoints.includes(current.endpoint)) {
+        if (!await current.unsubscribe()) throw new Error("PUSH_UNSUBSCRIBE_FAILED");
+      }
       const subscription =
-        current ??
+        (current && status.endpoints.includes(current.endpoint) ? current : null) ??
         (await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: decodeKey(status.publicKey),
@@ -100,6 +108,8 @@ export function PushNotificationControl() {
           userAgent: navigator.userAgent,
         },
       });
+      if (!user?.id) throw new Error("PUSH_ACCOUNT_UNAVAILABLE");
+      await bindBrowserPushAccount(user.id);
       setEnabled(true);
       toast.success(
         text(

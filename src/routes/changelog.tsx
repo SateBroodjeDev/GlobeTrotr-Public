@@ -3,7 +3,6 @@ import {
   Bug,
   CalendarDays,
   CheckCircle2,
-  Clock3,
   LockKeyhole,
   Rocket,
   Sparkles,
@@ -11,7 +10,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  PUBLIC_RELEASES,
+  PUBLIC_UPDATES,
   type PublicChangeKind,
 } from "@/lib/public-changelog";
 import { useLocale } from "@/lib/locale";
@@ -63,21 +62,21 @@ export function ChangelogPage() {
     <div className="mx-auto max-w-4xl space-y-10">
       <header className="aurora overflow-hidden rounded-3xl px-6 py-10 sm:px-10 sm:py-14">
         <Badge variant="secondary" className="mb-4 gap-1.5">
-          <Sparkles className="size-3" /> {text(PUBLIC_RELEASES[0].title, PUBLIC_RELEASES[0].titleEn).split(":")[0]}
+          <Sparkles className="size-3" /> {text(PUBLIC_UPDATES[0].title, PUBLIC_UPDATES[0].titleEn)}
         </Badge>
         <h1 className="font-display text-3xl font-semibold sm:text-5xl">
           {text("Wat is er nieuw?", "What's new?")}
         </h1>
         <p className="mt-4 max-w-2xl text-sm opacity-90 sm:text-base">
           {text(
-            "Nieuwe functies, verbeteringen en oplossingen. Helder uitgelegd, zodat je meteen weet wat er voor jou is veranderd.",
-            "New features, improvements and fixes, explained clearly so you know what has changed.",
+            "Nieuwe functies, verbeteringen en oplossingen, gebundeld in overzichtelijke updates. De volledige voorgeschiedenis vind je onder elke update.",
+            "New features, improvements and fixes, grouped into clear updates. The full history is available under each update.",
           )}
         </p>
       </header>
 
       <div className="relative space-y-8 before:absolute before:bottom-0 before:left-[19px] before:top-3 before:w-px before:bg-border sm:before:left-[27px]">
-        {PUBLIC_RELEASES.map((release, releaseIndex) => (
+        {PUBLIC_UPDATES.map((release, releaseIndex) => (
           <article key={release.id} className="relative pl-12 sm:pl-16">
             <div className="absolute left-0 top-0 grid size-10 place-items-center rounded-full border border-primary/20 bg-background text-primary shadow-sm sm:size-14">
               {releaseIndex === 0 ? (
@@ -88,15 +87,14 @@ export function ChangelogPage() {
             </div>
             <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span className="flex items-center gap-1.5">
-                <CalendarDays className="size-3.5" /> {formatDate(release.publishedAt, locale)}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Clock3 className="size-3.5" /> {formatTime(release.publishedAt, locale)}
+                <CalendarDays className="size-3.5" />
+                {formatDate(release.releases.at(-1)!.publishedAt, locale)}
+                {formatDate(release.releases[0].publishedAt, locale) !== formatDate(release.releases.at(-1)!.publishedAt, locale)
+                  ? ` – ${formatDate(release.releases[0].publishedAt, locale)}` : ""}
               </span>
               {releaseIndex === 0 && (
                 <Badge className="ml-auto">{text("Nieuwste update", "Latest update")}</Badge>
               )}
-              <Badge variant="outline">{release.version}</Badge>
             </div>
             <Card className="surface overflow-hidden">
               <CardContent className="p-5 sm:p-7">
@@ -135,6 +133,28 @@ export function ChangelogPage() {
                     );
                   })}
                 </div>
+                <details className="mt-5 border-t border-border pt-4">
+                  <summary className="cursor-pointer rounded text-sm font-medium text-muted-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                    {text("Alle wijzigingen en eerdere versies", "All changes and earlier versions")}
+                    <span className="ml-2 text-xs font-normal">({release.releases.length})</span>
+                  </summary>
+                  <div className="mt-4 space-y-6">
+                    {release.releases.map(original => <section key={original.id} id={original.id}>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant="outline">{original.version}</Badge>
+                        <time dateTime={original.publishedAt}>{formatDate(original.publishedAt, locale)}</time>
+                      </div>
+                      <h3 className="mt-2 text-sm font-semibold">{text(original.title, original.titleEn)}</h3>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{text(original.summary, original.summaryEn)}</p>
+                      <ul className="mt-3 space-y-3 text-xs leading-relaxed">
+                        {original.changes.map(change => <li key={change.title}>
+                          <strong className="font-medium">{text(change.title, change.titleEn)}</strong>
+                          <p className="text-muted-foreground">{text(change.description, change.descriptionEn)}</p>
+                        </li>)}
+                      </ul>
+                    </section>)}
+                  </div>
+                </details>
               </CardContent>
             </Card>
           </article>
@@ -151,13 +171,4 @@ function formatDate(value: string, locale: "nl-NL" | "en-GB") {
     year: "numeric",
     timeZone: "Europe/Amsterdam",
   }).format(new Date(value));
-}
-
-function formatTime(value: string, locale: "nl-NL" | "en-GB") {
-  const time = new Intl.DateTimeFormat(locale, {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Europe/Amsterdam",
-  }).format(new Date(value));
-  return locale === "nl-NL" ? `${time} uur` : `${time} Amsterdam time`;
 }

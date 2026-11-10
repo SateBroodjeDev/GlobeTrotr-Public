@@ -34,7 +34,7 @@ const blank = {
   address: "",
   displayName: "",
   mailboxType: "shared" as "shared" | "personal" | "automated",
-  hostingMode: "external" as "external" | "self_hosted",
+  hostingMode: "self_hosted" as "external" | "self_hosted",
   ownerUserId: "",
   signatureText: "",
   inboundSecretRef: "",
@@ -78,6 +78,10 @@ function Page() {
   const [deleting, setDeleting] = useState(false);
   const [mailboxTab, setMailboxTab] = useState("settings");
   const selectedMailbox = q.data?.mailboxes.find((item: any) => item.id === f.id);
+  const automaticShared = f.hostingMode === "self_hosted" && f.mailboxType === "shared"
+    && !selectedMailbox?.provisioning_create_only && (!selectedMailbox?.mail_server_account_id || selectedMailbox?.provisioning_app_password);
+  const initialManagedPassword = f.hostingMode === "self_hosted"
+    && !selectedMailbox?.mail_server_account_id && !selectedMailbox?.provisioning_create_only;
   const deleteBlockedReason = !q.data?.canDeleteMailbox
     ? text("Alleen de actieve platformeigenaar kan mailboxen verwijderen.", "Only the active platform owner can delete mailboxes.")
     : selectedMailbox?.mailbox_type === "automated" || ["info@globetrotr.nl", "privacy@globetrotr.nl"].includes(selectedMailbox?.address)
@@ -149,6 +153,14 @@ function Page() {
   }
   async function save() {
     if (saving) return;
+    if (!automaticShared && initialManagedPassword && !hasStoredPassword && !f.imapPassword.trim() && f.mailboxType !== "automated") {
+      toast.error(text("Kies eerst een wachtwoord voor het nieuwe postvak.", "Choose a password for the new mailbox first."));
+      return;
+    }
+    if (!automaticShared && initialManagedPassword && f.imapPassword.trim().startsWith("app_")) {
+      toast.error(text("Gebruik voor een nieuw postvak een gewoon wachtwoord. Een app-password kun je pas maken nadat het postvak bestaat.", "Use a regular password for a new mailbox. You can create an app password once the mailbox exists."));
+      return;
+    }
     setSaving(true);
     let result: { id: string };
     try {
@@ -175,14 +187,18 @@ function Page() {
       const code = String(error);
       toast.error(code.includes("MAILBOX_CREDENTIALS_KEY_")
         ? text("Mailbox niet opgeslagen: stel dezelfde geldige mailboxsleutel in op Node-01 en Node-02.", "Mailbox not saved: configure the same valid mailbox key on Node-01 and Node-02.")
-        : text("Mailbox kon niet worden opgeslagen. Controleer de serverlog voor de foutcode.", "Mailbox could not be saved. Check the server log for the error code."));
+        : code.includes("MAILBOX_PASSWORD_REQUIRED")
+          ? text("Kies eerst een wachtwoord voor het nieuwe postvak.", "Choose a password for the new mailbox first.")
+          : text("Mailbox kon niet worden opgeslagen. Controleer de serverlog voor de foutcode.", "Mailbox could not be saved. Check the server log for the error code."));
       setSaving(false);
       return;
     }
     setF((current) => ({ ...current, id: result.id, imapPassword: "" }));
     if (!f.id) setMailboxTab("settings");
-    if (f.imapPassword.trim()) setHasStoredPassword(true);
-    toast.success(text("Mailbox opgeslagen.", "Mailbox saved."));
+    if (f.imapPassword.trim() || (initialManagedPassword && f.mailboxType === "automated" && !f.id)) setHasStoredPassword(true);
+    toast.success(initialManagedPassword && f.active
+      ? text("Mailbox opgeslagen. Het systeem maakt het postvak aan op de mailserver.", "Mailbox saved. The system will create it on the mail server.")
+      : text("Mailbox opgeslagen.", "Mailbox saved."));
     try {
       await qc.invalidateQueries({ queryKey: ["corporate-business"] });
     } catch {
@@ -417,7 +433,7 @@ function Page() {
                   />
                   <Field
                     label={text("IMAP-gebruiker", "IMAP username")}
-                    value={f.imapUsername}
+                    value={f.hostingMode === "self_hosted" ? f.address : f.imapUsername}
                     disabled={f.hostingMode==="self_hosted"}
                     set={(v) => setF({ ...f, imapUsername: v })}
                   />
@@ -431,13 +447,15 @@ function Page() {
                       onChange={(e) => setF({ ...f, imapPort: Number(e.target.value) })}
                     />
                   </label>
-                  <Field
-                    label={text("IMAP-wachtwoord of app-password", "IMAP password or app password")}
+                  {!automaticShared && <Field
+                    label={initialManagedPassword
+                      ? text("Wachtwoord voor het nieuwe postvak", "Password for the new mailbox")
+                      : text("IMAP-wachtwoord of app-password", "IMAP password or app password")}
                     type="password"
                     value={f.imapPassword}
                     placeholder={hasStoredPassword ? "••••••••" : undefined}
                     set={(v) => setF({ ...f, imapPassword: v })}
-                  />
+                  />}
                 </div>
                 <label className="mt-3 flex items-center gap-2 text-sm">
                   <input
@@ -448,7 +466,18 @@ function Page() {
                   {text("Versleutelde IMAP-verbinding", "Encrypted IMAP connection")}
                 </label>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  {text(
+                  {automaticShared ? text("De mailbox en een beperkt app-wachtwoord voor synchronisatie worden automatisch aangemaakt. Je hoeft geen wachtwoord of app-key in te vullen.", "The mailbox and a limited app password for synchronization are created automatically. You do not need to enter a password or app key.") : initialManagedPassword ? text(
+                    hasStoredPassword
+                      ? "Het aanmaakwachtwoord is versleuteld opgeslagen. Laat dit veld leeg om het te behouden. Een app-password is niet nodig voor de aanmaak."
+                      : f.mailboxType === "automated"
+                        ? "Je kunt een wachtwoord kiezen of dit leeg laten om er automatisch één te genereren. Het systeem maakt het postvak aan; een app-password is niet nodig."
+                        : "Kies een wachtwoord. Het systeem maakt dit e-mailadres met dat wachtwoord aan via de mailserver-API en slaat het versleuteld op. Je hebt vooraf geen app-password nodig.",
+                    hasStoredPassword
+                      ? "The initial password is stored encrypted. Leave this field empty to keep it. No app password is needed to create the mailbox."
+                      : f.mailboxType === "automated"
+                        ? "Choose a password or leave this empty to generate one automatically. The system creates the mailbox; no app password is needed."
+                        : "Choose a password. The system creates this email address with that password through the mail server API and stores it encrypted. You do not need an app password beforehand.",
+                  ) : text(
                     hasStoredPassword
                       ? "•••••••• betekent dat een wachtwoord is opgeslagen. Laat dit veld leeg om het te behouden; typ een nieuw wachtwoord om het te vervangen."
                       : "Vul het IMAP-wachtwoord in om dit postvak te koppelen. Het wachtwoord wordt versleuteld opgeslagen.",
@@ -457,7 +486,7 @@ function Page() {
                       : "Enter the IMAP password to connect this mailbox. The password is stored encrypted.",
                   )}
                 </p>
-                {f.hostingMode === "self_hosted" && <p className="mt-2 text-xs text-muted-foreground">
+                {f.hostingMode === "self_hosted" && !automaticShared && !initialManagedPassword && <p className="mt-2 text-xs text-muted-foreground">
                   {text("Voor een bestaand Stalwart-postvak kun je hier een app-password voor IMAP opslaan. Het hoofdwachtwoord blijft dan behouden. Maak het app-password eerst aan in het mailaccount en controleer daarna de synchronisatie.", "For an existing Stalwart mailbox, you can save an IMAP app password here without changing the primary password. Create the app password in the mail account first, then check synchronization.")}
                 </p>}
               </div>
@@ -531,7 +560,7 @@ function Page() {
                   <div><dt className="text-xs text-muted-foreground">{text("Laatst gesynchroniseerd", "Last synchronised")}</dt><dd className="mt-1 font-medium">{formatSyncTime(mailbox.last_synced_at, locale, text)}</dd></div>
                   <div><dt className="text-xs text-muted-foreground">{text("Laatste poging", "Last attempt")}</dt><dd className="mt-1 font-medium">{formatSyncTime(mailbox.last_sync_attempt_at, locale, text)}</dd></div>
                 </dl>
-                {mailbox.provisioning_error_code && <p className="break-all rounded-lg bg-destructive/5 p-3 text-destructive"><span className="font-medium">{text("Mailserver vraagt aandacht", "Mail server needs attention")}</span><code className="mt-1 block text-xs">{mailbox.provisioning_error_code}</code></p>}
+                {mailbox.provisioning_error_code && <p className="break-all rounded-lg bg-destructive/5 p-3 text-destructive"><span className="font-medium">{text("Mailserver vraagt aandacht", "Mail server needs attention")}</span>{mailbox.provisioning_error_code === "STALWART_SHARED_PERMISSIONS_REQUIRED" && <span className="mt-1 block text-sm">{text("Het server-token mist rechten voor het automatisch uitgeven van een mailbox-app-wachtwoord. Laat de beheerder de Stalwart-rechten controleren; wijzig de algemene directory niet.", "The server token lacks permission to issue a mailbox app password automatically. Ask the administrator to check Stalwart permissions; keep the global directory unchanged.")}</span>}<code className="mt-1 block text-xs">{mailbox.provisioning_error_code}</code></p>}
                 {mailbox.last_sync_error_code && <div className="rounded-lg bg-destructive/5 p-3 text-destructive"><p className="text-sm">{mailboxErrorHint(mailbox.last_sync_error_code, text)}</p><code className="mt-1 block break-all text-xs">{mailbox.last_sync_error_code}</code></div>}
                 <div className="flex flex-wrap items-center gap-3 border-t pt-4">
                   <Button variant="outline" disabled={requestingSync || !mailbox.active || Boolean(mailbox.sync_requested_at) || mailbox.sync_status === "syncing"} onClick={() => void requestSync()}>

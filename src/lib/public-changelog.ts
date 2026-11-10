@@ -1,922 +1,1623 @@
 export type PublicChangeKind = "new" | "improved" | "fixed" | "secure";
-
 export type PublicChange = {
-  title: string;
-  titleEn: string;
-  description: string;
-  descriptionEn: string;
-  kind: PublicChangeKind;
+    title: string;
+    titleEn: string;
+    description: string;
+    descriptionEn: string;
+    kind: PublicChangeKind;
 };
-
 export type PublicRelease = {
-  id: string;
-  version: string;
-  publishedAt: string;
-  title: string;
-  titleEn: string;
-  summary: string;
-  summaryEn: string;
-  changes: PublicChange[];
+    id: string;
+    version: string;
+    publishedAt: string;
+    title: string;
+    titleEn: string;
+    summary: string;
+    summaryEn: string;
+    changes: PublicChange[];
 };
-
+export type PublicUpdate = {
+    id: string;
+    title: string;
+    titleEn: string;
+    summary: string;
+    summaryEn: string;
+    releases: PublicRelease[];
+    changes: PublicChange[];
+};
 export const PUBLIC_BETA_STATUS = {
-  label: "Meedenken en testen",
-  labelEn: "Feedback and testing",
-  description:
-    "Help GlobeTrotr verbeteren met je eigen reissituaties. Deel wat goed werkt en waar je vastloopt. Bij Wat is er nieuw vind je afgeronde verbeteringen.",
-  descriptionEn:
-    "Help improve GlobeTrotr with your own travel situations. Share what works well and where you get stuck. What's new lists completed improvements.",
-  unavailable: [] as Array<{ nl: string; en: string }>,
+    label: "Meedenken en testen",
+    labelEn: "Feedback and testing",
+    description: "Help GlobeTrotr verbeteren met je eigen reissituaties. Deel wat goed werkt en waar je vastloopt. Bij Wat is er nieuw vind je afgeronde verbeteringen.",
+    descriptionEn: "Help improve GlobeTrotr with your own travel situations. Share what works well and where you get stuck. What's new lists completed improvements.",
+    unavailable: [] as Array<{
+        nl: string;
+        en: string;
+    }>,
 } as const;
-
 /** Public-safe, grouped release notes, with the latest release first. */
 export const PUBLIC_RELEASES: PublicRelease[] = [
-  {
-    id: "2026-10-13-team-and-mail",
-    version: "1.0.1",
-    publishedAt: "2026-10-18T00:00:00+02:00",
-    title: "Een rustigere reisplanner en teamwerkplek",
-    titleEn: "A calmer travel planner and team workspace",
-    summary: "Je reizen staan hoger in het overzicht en jaarcijfers klap je open wanneer je ze nodig hebt. Medewerkers, mailboxen en financiële lijsten zijn overzichtelijker ingedeeld. Privacyverzoeken openen het bestaande formulier. Advertentieblokken en de bijbehorende keuzevensters zijn verwijderd.",
-    summaryEn: "Your trips appear higher in the overview, with yearly statistics available when you expand them. Staff, mailboxes and financial lists have clearer layouts. Privacy requests open the existing form. Advertising blocks and their choice windows have been removed.",
-    changes: [
-      {
-        kind: "improved",
-        title: "Rustigere pagina’s zonder advertentieblokken",
-        titleEn: "Calmer pages without advertising blocks",
-        description: "De advertentie-integratie en de bijbehorende privacyteksten en keuzevensters zijn verwijderd. Taalvoorkeuren en optionele gebruiksstatistieken beheer je nog steeds via Privacykeuzes.",
-        descriptionEn: "The advertising integration and its privacy text and choice windows have been removed. Language preferences and optional usage statistics remain available through Privacy choices.",
-      },
-      {
-        kind: "improved",
-        title: "Sneller bij je reizen",
-        titleEn: "Get to your trips sooner",
-        description: "De kop, je volgende reis en het jaaroverzicht staan samen in één compacte kaart. Jaarcijfers en delen blijven beschikbaar achter een uitklapregel. Ook de mobiele filters nemen minder ruimte in.",
-        descriptionEn: "The heading, next trip and yearly overview share one compact card. Yearly statistics and sharing remain available in an expandable section. Mobile filters also take up less space.",
-      },
-      {
-        kind: "improved",
-        title: "Rustiger bedrijfsbeheer",
-        titleEn: "Calmer company administration",
-        description: "Bestaande medewerkers staan bovenaan; toevoegen opent een apart venster met duidelijke groepen en rechten. Mailboxpanelen zijn uitgelijnd en facturen en transacties kun je apart uitklappen.",
-        descriptionEn: "Existing staff appear first, while adding someone opens a separate window with clearly grouped fields and permissions. Mailbox panels are aligned, and invoices and transactions expand separately.",
-      },
-      {
-        kind: "fixed",
-        title: "Privacyacties met duidelijke vervolgstappen",
-        titleEn: "Privacy actions with clear next steps",
-        description: "Verzoek indienen opent het privacyformulier bij je account. Zonder account opent het contactformulier met Privacy geselecteerd.",
-        descriptionEn: "Submitting a request opens the privacy form in your account. Without an account, the contact form opens with Privacy selected.",
-      },
-      {
-        kind: "fixed",
-        title: "Mailboxtoegang blijft correct",
-        titleEn: "Mailbox access stays correct",
-        description: "Een inactief postvak verschijnt niet meer via een oud lidmaatschap. De eigenaar behoudt beheerrechten als daarnaast een beperkter lidmaatschap bestaat.",
-        descriptionEn: "An inactive mailbox no longer appears through an old membership. Owners retain management access when a more restricted membership also exists.",
-      },
-      {
-        kind: "improved",
-        title: "Privacykeuzes bereikbaar op mobiel",
-        titleEn: "Privacy choices remain accessible on mobile",
-        description: "De knoppen voor alleen noodzakelijke opslag en het bewaren van je keuze blijven zichtbaar terwijl je de uitleg doorleest.",
-        descriptionEn: "The necessary-only and save-choice buttons remain visible while you scroll through the explanation.",
-      },
-      {
-        kind: "improved",
-        title: "Overzichtelijk mailboxbeheer",
-        titleEn: "Clearer mailbox management",
-        description: "Mailboxgegevens, verbindingsstatus en toegang staan overzichtelijk bij elkaar. Je ziet direct wie eigenaar is en welke toegang anderen hebben.",
-        descriptionEn: "Mailbox details, connection status and access are grouped clearly. See who owns a mailbox and which access other team members have.",
-      },
-      {
-        kind: "new",
-        title: "Leesstatus en ongewenste mail",
-        titleEn: "Read status and junk mail",
-        description: "Ongelezen gesprekken hebben een stip en vet onderwerp. Openen markeert ze als gelezen; je kunt ze ook weer ongelezen maken. Ongewenste berichten staan in een aparte map.",
-        descriptionEn: "Unread conversations have a dot and a bold subject. Opening them marks them as read, and you can mark them unread again. Junk messages appear in a separate folder.",
-      },
-      {
-        kind: "fixed",
-        title: "Mailmeldingen sluiten bij afhandelen",
-        titleEn: "Email notifications close when handled",
-        description: "De melding voor inkomende bedrijfsmail verdwijnt bij openen, archiveren of verwijderen. Bij gedeelde postvakken volgt dit de gezamenlijke leesstatus.",
-        descriptionEn: "Incoming company email notifications disappear when a message is opened, archived or deleted. Shared mailboxes use the shared read status.",
-      },
-      {
-        kind: "improved",
-        title: "Minder wachten bij teruggaan naar reizen",
-        titleEn: "Less waiting when returning to trips",
-        description: "Je reizen worden niet onnodig opnieuw geladen wanneer dezelfde sessie wordt vernieuwd. Onafhankelijke inlogcontroles worden tegelijk uitgevoerd.",
-        descriptionEn: "Trips are no longer unnecessarily reloaded when the same session refreshes. Independent sign-in checks run in parallel.",
-      },
-      {
-        kind: "secure",
-        title: "Teamlogin en centraal uitloggen",
-        titleEn: "Team sign-in and central sign-out",
-        description: "Teamleden gebruiken hun eigen centrale teamidentiteit. Uitloggen uit GlobeTrotr sluit ook de centrale teamsessie; bestaande reizen en persoonlijke accountgegevens blijven behouden.",
-        descriptionEn: "Team members use their own central team identity. Signing out of GlobeTrotr also ends the central team session while existing trips and personal account details are preserved.",
-      },
-      {
-        kind: "improved",
-        title: "Privacy in acht overzichtelijke onderwerpen",
-        titleEn: "Privacy in eight clear topics",
-        description: "Lees de kern en open alleen de uitleg die je nodig hebt. Gegevensgebruik, cookies, bewaartermijnen en je rechten staan bij elkaar, in het Nederlands en Engels.",
-        descriptionEn: "Read the essentials and expand only the explanation you need. Data use, cookies, retention periods and your rights are grouped together in Dutch and English.",
-      },
-      {
-        kind: "new",
-        title: "Privacykeuzes bij je account",
-        titleEn: "Privacy choices with your account",
-        description: "De website en portal delen je keuzes. Als je bent ingelogd, worden ze ook bij je account opgeslagen zodat je ze op een ander apparaat kunt gebruiken. Analytics blijft optioneel.",
-        descriptionEn: "The website and portal share your choices. When signed in, your choices are also saved with your account so you can use them on another device. Analytics remains optional.",
-      },
-      {
-        kind: "fixed",
-        title: "Automatische mails in de gekozen taal",
-        titleEn: "Automated emails in your selected language",
-        description: "Regionale taalinstellingen worden herkend als Nederlands of Engels. Zo krijgen onder andere uitnodigingen en notificaties de juiste tekst, knoppen en voettekst. Zelfgeschreven berichten worden niet vertaald.",
-        descriptionEn: "Regional language settings are recognised as Dutch or English. Invitations and notifications receive the matching text, buttons and footer. Manually written messages are not translated.",
-      },
-    ],
-  },
-  {
-    id: "2026-10-08-1-0-0",
-    version: "1.0.0",
-    publishedAt: "2026-10-08T00:00:00+02:00",
-    title: "GlobeTrotr 1.0: van reisidee tot onderweg",
-    titleEn: "GlobeTrotr 1.0: from travel idea to life on the road",
-    summary:
-      "De eerste volledige release brengt routes, verblijf, vervoer, reisgenoten, kosten en herinneringen samen. Plan je reis, vergelijk mogelijkheden en neem je informatie mee op pad, met een eigen omgeving voor reisorganisaties.",
-    summaryEn:
-      "The first full release brings routes, accommodation, transport, travel companions, costs and memories together. Plan your trip, compare options and take your information with you, with a dedicated workspace for travel organisations.",
-    changes: [
-      {
-        kind: "improved",
-        title: "Jouw kaart en dagoverzicht",
-        titleEn: "Your map and daily overview",
-        description: "Koppel hotels en activiteiten zelf aan een routeplaats of kies een eigen kaartpunt. Filter route, hotels en activiteiten apart. De dagplanning toont ook lege dagen, overnachtingen en ontbrekende gegevens, met aankomst van nachtvluchten op de juiste dag.",
-        descriptionEn: "Link hotels and activities to a route place or choose a separate map marker. Filter route, hotels and activities independently. Daily planning includes empty days, overnight stays and missing details, with overnight flight arrivals on the right day.",
-      },
-      {
-        kind: "improved",
-        title: "Eén kaartpunt voor dezelfde locatie",
-        titleEn: "One map marker for the same location",
-        description: "Bekijk activiteiten, verblijven en kosten op dezelfde locatie samen in één kaartmarkering. Kies bij een activiteit een locatie en of je deze op de kaart wilt tonen. Je boekingen en herhaalde routebezoeken blijven behouden.",
-        descriptionEn: "View activities, stays and expenses within the same known town together in one map marker. Route stops follow calendar order and popup bookings follow date and start time. Choose an activity's location and whether to show it on the map. Your bookings and repeat route visits are retained.",
-      },
-      {
-        kind: "fixed",
-        title: "Je reisnachten en cijfers duidelijk in beeld",
-        titleEn: "Clear trip nights and insights",
-        description: "Bekijk reisdagen, overnachtingen en routepunten boven het reisoverzicht. Geboekte en nog ontbrekende nachten worden apart getoond, ook wanneer verblijven alleen als boeking zijn ingevoerd. Open alle statistieken vanuit dit overzicht.",
-        descriptionEn: "See trip days, nights and route stops above the trip overview. Booked and still-missing nights are shown separately, including stays entered only as bookings. Open all insights directly from this summary.",
-      },
-      {
-        kind: "improved",
-        title: "Verblijfsduur kiezen en boekingen op datum",
-        titleEn: "Choose stay length and view bookings by date",
-        description: "Kies bij ontbrekende overnachtingen het aantal nachten voordat je de hotelzoeker opent. De uitcheckdatum past mee aan. Beheer alle boekingen in één lijst op datum en begintijd, zonder categorieblokken.",
-        descriptionEn: "Choose the number of missing nights before opening hotel search. The check-out date updates accordingly. Manage all bookings in one list ordered by date and start time, without category sections.",
-      },
-      {
-        kind: "improved",
-        title: "Routes die aansluiten op jouw vervoer",
-        titleEn: "Routes that fit your transport",
-        description: "Kies vervoer per etappe en bereken auto-, fiets- en wandeltrajecten over echte wegen. Bekijk afstand, reistijd en een routevoorstel voordat je wijzigingen toepast. Geboekte heen- en terugreizen staan in het routeoverzicht, met afzonderlijke trajecten naar en vanaf de luchthaven. Vluchten verbinden vertrek en aankomst; er wordt geen automatische autorit terug naar het beginpunt toegevoegd.",
-        descriptionEn: "Choose transport for each stage and calculate driving, cycling and walking routes on real roads. Review distance, travel time and a route proposal before applying changes. Booked outbound and return journeys appear in the route overview, with separate stages to and from the airport. Flights connect departure and arrival; no automatic drive back to the starting point is added.",
-      },
-      {
-        kind: "improved",
-        title: "Verblijf en huurauto in de bestaande zoekers",
-        titleEn: "Accommodation and car rental in the existing search tools",
-        description: "Zoek hotels en huurauto’s met je reislocaties, datums en voorkeuren. Voeg resultaten toe aan de Vergelijker en open de boekingslink wanneer je wilt boeken. CJ-partnerlinks zijn geïntegreerd bij de resultaten; de losse Booking.com-widget en extra knop zijn verwijderd.",
-        descriptionEn: "Search for hotels and rental cars using your trip locations, dates and preferences. Add results to Comparison and open the booking link when you want to book. CJ affiliate links are integrated with results; the separate Booking.com widget and extra button have been removed.",
-      },
-      {
-        kind: "fixed",
-        title: "Huurautoaanvragen met de juiste zoekgegevens",
-        titleEn: "Car rental requests with the correct search details",
-        description: "De huurautozoeker verstuurt de datums, tijden en coördinaten in het formaat van de aanbieder. Ongeldige zoekgegevens, ontbrekende configuratie en een bereikte zoeklimiet krijgen een gerichte melding.",
-        descriptionEn: "The rental car search sends dates, times and coordinates in the provider’s format. Invalid search details, missing configuration and an exhausted search quota receive specific messages.",
-      },
-      {
-        kind: "improved",
-        title: "Samen reizen met een rustiger deelnemersoverzicht",
-        titleEn: "Travel together with a cleaner participant overview",
-        description: "Nodig reisgenoten afzonderlijk of samen uit en beheer hun toegang per persoon. De overbodige balk ‘Rol toepassen’ en bijbehorende selectievakjes zijn verwijderd; vergelijken, stemmen en samen plannen blijven onderdeel van de reis.",
-        descriptionEn: "Invite travel companions individually or together and manage access for each person. The redundant ‘Apply role’ bar and its checkboxes have been removed; comparison, voting and shared planning remain part of the trip.",
-      },
-      {
-        kind: "fixed",
-        title: "Kalender en verblijfcontrole beter bereikbaar",
-        titleEn: "Easier access to calendars and accommodation checks",
-        description: "Abonneer je agenda op je reisplanning en beheer de koppeling bij de juiste reis. Op mobiel opent een melding over ontbrekende hotelnachten rechtstreeks de verblijfcontrole.",
-        descriptionEn: "Subscribe your calendar to your travel schedule and manage the connection for the relevant trip. On mobile, a notice about missing hotel nights opens the accommodation check directly.",
-      },
-      {
-        kind: "improved",
-        title: "Reisinformatie mee voor onderweg",
-        titleEn: "Travel information to take on the road",
-        description: "Bewaar je offline reispakket met planning, beschikbare documenten en reisgegevens. Updates, synchronisatie en opslagproblemen zijn zichtbaar, terwijl persoonlijke paklijsten en vertrekcontroles helpen bij de voorbereiding.",
-        descriptionEn: "Save your offline trip pack with your schedule, available documents and travel information. Updates, synchronisation and storage issues are visible, while personal packing lists and departure checks help you prepare.",
-      },
-      {
-        kind: "improved",
-        title: "Vluchten en meldingen voor jouw reisdatum",
-        titleEn: "Flights and notifications for your travel date",
-        description: "Controleer vluchten voor de gekozen datum en bekijk wijzigingen voordat je ze overneemt. Pro houdt vluchtinformatie bij met statusmeldingen rond vertrek; e-mail-, push- en accountmeldingen volgen je voorkeuren.",
-        descriptionEn: "Check flights for the selected date and review changes before accepting them. Pro keeps flight information up to date with status notifications around departure; email, push and account notifications follow your preferences.",
-      },
-      {
-        kind: "new",
-        title: "Zakelijke postvakken vanuit Corporate Admin",
-        titleEn: "Business mailboxes from Corporate Admin",
-        description: "Beheer gedeelde en persoonlijke postvakken vanuit de bedrijfsomgeving. Postvakken op de GlobeTrotr-mailserver worden vanuit Corporate Admin aangemaakt en gekoppeld, met afzonderlijke status voor aanmaak en synchronisatie.",
-        descriptionEn: "Manage shared and personal mailboxes from the corporate workspace. Mailboxes hosted on the GlobeTrotr mail server are created and connected from Corporate Admin, with separate provisioning and synchronisation status.",
-      },
-      {
-        kind: "improved",
-        title: "Agency-facturen en bedrijfsgegevens op één plek",
-        titleEn: "Agency invoices and company details in one place",
-        description: "Beheer juridische bedrijfsgegevens, klantfacturen en creditcorrecties in de Agency-omgeving. Facturen gebruiken vaste gegevens, unieke nummering en nauwkeurige bedragen en zijn beschikbaar voor afdruk en export.",
-        descriptionEn: "Manage legal company details, client invoices and credit corrections in the Agency workspace. Invoices use fixed records, unique numbering and precise amounts, with print and export options.",
-      },
-      {
-        kind: "secure",
-        title: "Delen en privacy onder jouw controle",
-        titleEn: "Sharing and privacy under your control",
-        description: "Openbare profielen en reislinks tonen wat je bewust deelt. Persoonlijke dagboekteksten van andere reisgenoten blijven buiten je accountdownload.",
-        descriptionEn: "Public profiles and trip links show what you deliberately share. Other travellers’ personal journal entries stay out of your account download.",
-      },
-    ],
-  },
-  {
-    id: "2026-09-30-beta-0-9-5",
-    version: "Beta 0.9.5",
-    publishedAt: "2026-09-30T18:00:00+02:00",
-    title: "Jouw reizen, profiel en vrienden",
-    titleEn: "Your trips, profile and friends",
-    summary:
-      "Openbare reizigersprofielen, bezochte landen, vriendschappen en bewust gedeelde reizen, met Pro-herkenning en privacy voor Agency-accounts.",
-    summaryEn:
-      "Public traveler profiles, visited countries, friendships and deliberately shared trips, with Pro recognition and privacy for Agency accounts.",
-    changes: [
-      {
-        kind: "new",
-        title: "Eigen reizigersprofiel",
-        titleEn: "Your traveler profile",
-        description:
-          "Kies een unieke profielnaam, schrijf een korte biografie en toon bezochte landen met vlaggen en alleen de reizen die je bewust openbaar deelt.",
-        descriptionEn:
-          "Choose a unique username, write a short biography and show visited countries with flags and only trips you deliberately share publicly.",
-      },
-      {
-        kind: "new",
-        title: "Vrienden onder reizigers",
-        titleEn: "Friends among travelers",
-        description:
-          "Verstuur en beheer vriendschapsverzoeken met e-mail-, push- en accountmeldingen volgens de voorkeuren van de ontvanger.",
-        descriptionEn:
-          "Send and manage friend requests with email, push and account notifications according to the recipient's preferences.",
-      },
-      {
-        kind: "improved",
-        title: "Delen zonder centrale etalage",
-        titleEn: "Sharing without a central directory",
-        description:
-          "Deel een directe reislink of je profielpagina. GlobeTrotr zet openbare reizen niet meer centraal op de homepage.",
-        descriptionEn:
-          "Share a direct trip link or your profile page. GlobeTrotr no longer lists public trips centrally on the homepage.",
-      },
-      {
-        kind: "secure",
-        title: "Profielprivacy per account",
-        titleEn: "Profile privacy per account",
-        description:
-          "Een profiel is vrijwillig en vriendschapsverzoeken zijn apart instelbaar. Actieve Agency-accounts krijgen geen openbare reizigerspagina.",
-        descriptionEn:
-          "Profiles are optional and friend requests have a separate setting. Active Agency accounts do not receive a public traveler page.",
-      },
-    ],
-  },
-  {
-    id: "2026-09-28-beta-0-9-3",
-    version: "Beta 0.9.3",
-    publishedAt: "2026-09-28T19:07:09+02:00",
-    title: "Persoonlijk voorbereiden en professioneel beheren",
-    titleEn: "Personal preparation and professional management",
-    summary:
-      "Paklijsten per persoon en voor de groep, betrouwbare vluchtcontrole en een zichtbare, volwaardige Agency-omgeving.",
-    summaryEn:
-      "Packing lists for each person and the group, reliable flight checks and a visible, complete Agency workspace.",
-    changes: [
-      {
-        kind: "fixed",
-        title: "Offline direct bereikbaar",
-        titleEn: "Offline access restored",
-        description:
-          "De Offline-knop opent weer rechtstreeks het offline reispakket met bewaren, bijwerken, openen, synchroniseren en verwijderen.",
-        descriptionEn:
-          "The Offline button once again opens the offline trip pack directly, with save, update, open, sync and remove controls.",
-      },
-      {
-        kind: "new",
-        title: "Gezamenlijke en persoonlijke paklijsten",
-        titleEn: "Shared and personal packing lists",
-        description:
-          "Open één groepspaklijst voor alle reisgenoten of kies een persoon. Ieder item bevat bagagetype, categorie en aantal.",
-        descriptionEn:
-          "Open one group packing list for all travellers or select a person. Every item includes baggage type, category and quantity.",
-      },
-      {
-        kind: "improved",
-        title: "Paklijstsjablonen op de juiste lijst",
-        titleEn: "Packing templates on the right list",
-        description:
-          "Voeg een winter-, stads-, strand-, roadtrip- of zakensjabloon toe aan de gekozen groeps- of persoonlijke lijst, zonder bestaande items te verdubbelen.",
-        descriptionEn:
-          "Add a winter, city, beach, road trip or business template to the selected group or personal list without duplicating existing items.",
-      },
-      {
-        kind: "improved",
-        title: "Paklijst per tas gegroepeerd",
-        titleEn: "Packing list grouped by bag",
-        description:
-          "Iedere gekozen paklijst toont totale voortgang en groepeert items onder handbagage, cabinebagage, ruimbagage en gezamenlijke bagage.",
-        descriptionEn:
-          "Every selected packing list shows overall progress and groups items under personal item, cabin baggage, checked baggage and shared baggage.",
-      },
-      {
-        kind: "improved",
-        title: "Startlijsten voor vertrek en boodschappen",
-        titleEn: "Starter lists for departure and shopping",
-        description:
-          "Vul de vertrekcontrole of reisboodschappen met één knop met praktische standaardpunten; eigen en bestaande punten blijven behouden.",
-        descriptionEn:
-          "Fill the departure check or travel shopping list with practical standard items in one click while keeping custom and existing items.",
-      },
-      {
-        kind: "improved",
-        title: "Datumgebonden vluchtcontrole",
-        titleEn: "Date-specific flight checks",
-        description:
-          "AeroDataBox zoekt voor de gekozen reisdatum en toont handmatige wijzigingen eerst als voorstel. Pro synchroniseert status, tijden, gate, terminal, incheckbalie en bagageband en gebruikt vlak voor vertrek live alerts met polling als vangnet.",
-        descriptionEn:
-          "AeroDataBox searches for the selected travel date and shows manual changes as a proposal first. Pro synchronises status, times, gate, terminal, check-in desk and baggage belt, using live alerts close to departure with polling as a fallback.",
-      },
-      {
-        kind: "improved",
-        title: "Routeplanning over echte wegen",
-        titleEn: "Routing on real roads",
-        description:
-          "OpenRouteService berekent auto-, fiets- en wandelroutes met maximaal 200 punten. Tolwegen, veerboten, reistijd en rustmomenten zijn vooraf controleerbaar; toepassen gebeurt altijd bewust.",
-        descriptionEn:
-          "OpenRouteService calculates driving, cycling and walking routes with up to 200 points. Toll roads, ferries, travel time and breaks can be reviewed in advance; applying a proposal is always deliberate.",
-      },
-      {
-        kind: "improved",
-        title: "Volwaardige Agency-omgeving",
-        titleEn: "Complete Agency workspace",
-        description:
-          "Agency blijft zichtbaar met klantbeheer, teamrechten, onboarding, eigen branding, subdomeinen, geverifieerde domeinen en eigen SMTP.",
-        descriptionEn:
-          "Agency remains visible with client management, team permissions, onboarding, custom branding, subdomains, verified domains and custom SMTP.",
-      },
-    ],
-  },
-  {
-    id: "2026-09-26-beta-0-9-2",
-    version: "Beta 0.9.2",
-    publishedAt: "2026-09-26T11:47:36+02:00",
-    title: "Een reis om te bewaren en te delen",
-    titleEn: "A journey to keep and share",
-    summary:
-      "Het reisdagboek groeide uit tot een eigen ervaring met offline herinneringen, media, samenvattingen en een bewust gedeeld live reisverhaal.",
-    summaryEn:
-      "The travel journal became a dedicated experience with offline memories, media, summaries and a deliberately shared live travel story.",
-    changes: [
-      {
-        kind: "new",
-        title: "Uitgebreid reisdagboek",
-        titleEn: "Extended travel journal",
-        description:
-          "Herbeleef je reis via een tijdlijn, galerij en kaart, bewaar gekozen inhoud offline en maak bewust een samenvatting of eigen PDF.",
-        descriptionEn:
-          "Relive your trip through a timeline, gallery and map, keep selected content offline and deliberately create a summary or personal PDF.",
-      },
-      {
-        kind: "new",
-        title: "Live reisverhaal",
-        titleEn: "Live travel story",
-        description:
-          "Deel bewust openbare herinneringen, foto's en afgeschermde video's met bevestigde volgers; bezoekers kunnen liken en begrensd reageren zonder account.",
-        descriptionEn:
-          "Share deliberately public memories, photos and protected videos with confirmed followers; visitors can like and leave moderated comments without an account.",
-      },
-      {
-        kind: "improved",
-        title: "Dagboek als eigen bestemming",
-        titleEn: "Journal as a dedicated destination",
-        description:
-          "Het dagboek heeft een eigen portaalpagina en opent vanuit iedere reis direct op de juiste herinneringen.",
-        descriptionEn:
-          "The journal has its own portal page and opens directly on the correct memories from every trip.",
-      },
-    ],
-  },
-  {
-    id: "2026-09-25-beta-0-9-1",
-    version: "Beta 0.9.1",
-    publishedAt: "2026-09-25T17:10:00+02:00",
-    title: "Slimmer plannen en duidelijker voorbereiden",
-    titleEn: "Smarter planning and clearer preparation",
-    summary:
-      "Een brede beta-update voor route-import, samenwerken, offline gebruik, verblijfcontrole en een controleerbaar routevoorstel.",
-    summaryEn:
-      "A broad beta update for route imports, collaboration, offline use, accommodation checks and a reviewable route proposal.",
-    changes: [
-      {
-        kind: "new",
-        title: "Favoriete plaatsen",
-        titleEn: "Favourite places",
-        description: "Bewaar persoonlijke plaatsen en voeg ze later snel aan een andere reis toe.",
-        descriptionEn: "Save personal places and quickly add them to another trip later.",
-      },
-      {
-        kind: "new",
-        title: "Gedeelde reislijsten",
-        titleEn: "Shared trip lists",
-        description:
-          "Taken zijn te ordenen als vertrekcheck, boodschappenlijst of een eigen lijst, met verantwoordelijke en deadline.",
-        descriptionEn:
-          "Tasks can be organised as departure, shopping or custom lists, with an assignee and deadline.",
-      },
-      {
-        kind: "new",
-        title: "Groepen uitnodigen",
-        titleEn: "Group invitations",
-        description:
-          "Nodig meerdere reizigers tegelijk uit, bekijk vooraf hun toegang en wijzig bestaande rollen in bulk.",
-        descriptionEn:
-          "Invite multiple travellers at once, preview their access and update existing roles in bulk.",
-      },
-      {
-        kind: "improved",
-        title: "Veilige reisvariant",
-        titleEn: "Safe trip variant",
-        description:
-          "Bekijk vooraf wat wordt gekopieerd; toegang, documenten, betalingen en reserveringscodes blijven achter.",
-        descriptionEn:
-          "Preview what will be copied; access, documents, payments and reservation codes stay behind.",
-      },
-      {
-        kind: "new",
-        title: "Plaatsen langs de route",
-        titleEn: "Places along the route",
-        description:
-          "Zoek rond een routeplaats naar horeca, activiteiten, bezienswaardigheden en praktische voorzieningen en voeg ze pas na controle toe.",
-        descriptionEn:
-          "Find food, activities, sights and practical services near a route stop and add them only after reviewing the result.",
-      },
-      {
-        kind: "improved",
-        title: "Eerlijke hotelvergelijking",
-        titleEn: "Fair hotel comparison",
-        description:
-          "Vergelijk verblijfskandidaten met dezelfde bestemming, data, gasten en kamers, inclusief prijs, belastingen en voorwaarden.",
-        descriptionEn:
-          "Compare accommodation candidates using the same destination, dates, guests and rooms, including price, taxes and terms.",
-      },
-      {
-        kind: "new",
-        title: "Routevoorstel met controle",
-        titleEn: "Route proposal with review",
-        description:
-          "Vergelijk de huidige stopvolgorde met een korter voorstel en een indicatie van afstand en reistijd. De route verandert pas na je bevestiging.",
-        descriptionEn:
-          "Compare the current stop order with a shorter proposal and estimated distance and travel time. The route only changes after your confirmation.",
-      },
-      {
-        kind: "improved",
-        title: "Ontbrekende verblijven per periode",
-        titleEn: "Missing stays grouped by period",
-        description:
-          "Opeenvolgende ontbrekende nachten op dezelfde plaats worden als één duidelijke verblijfsperiode getoond.",
-        descriptionEn:
-          "Consecutive missing nights in the same place are shown as one clear accommodation period.",
-      },
-      {
-        kind: "improved",
-        title: "GPX-route vooraf controleren",
-        titleEn: "Review a GPX route before import",
-        description:
-          "Een lokaal routevoorbeeld toont volgorde, selectie en bestaande punten voordat bestemmingen worden toegevoegd.",
-        descriptionEn:
-          "A local route preview shows order, selection and existing points before destinations are added.",
-      },
-      {
-        kind: "improved",
-        title: "Offline uitgaven beheren",
-        titleEn: "Manage offline expenses",
-        description:
-          "Kies uitgaven afzonderlijk voor synchronisatie, verwijder een lokale regel en herken conflicten voordat servergegevens worden geraakt.",
-        descriptionEn:
-          "Select expenses individually for synchronisation, remove a local entry and identify conflicts before server data is affected.",
-      },
-    ],
-  },
-  {
-    id: "2026-09-23-beta-0-9",
-    version: "Beta 0.9",
-    publishedAt: "2026-09-23T12:00:00+02:00",
-    title: "Samen beslissen en voorbereid op reis",
-    titleEn: "Decide together and travel prepared",
-    summary:
-      "Een grote productupdate voor vergelijken, samenwerken, Agency-intake, meldingen en gebruik onderweg.",
-    summaryEn:
-      "A major product update for comparison, collaboration, Agency intake, notifications and use while travelling.",
-    changes: [
-      {
-        kind: "new",
-        title: "Reisvergelijker en gezamenlijke keuzes",
-        titleEn: "Trip comparison and shared decisions",
-        description:
-          "Vergelijk reisopties per categorie, bespreek kandidaten, stem samen en zet de definitieve keuze gecontroleerd om naar één boeking.",
-        descriptionEn:
-          "Compare travel options by category, discuss candidates, vote together and convert the final choice into exactly one booking.",
-      },
-      {
-        kind: "new",
-        title: "Veilige klantformulieren voor Agencies",
-        titleEn: "Secure Agency client forms",
-        description:
-          "Agencies kunnen tweetalige intakeformulieren delen, antwoorden beoordelen en goedgekeurde voorkeuren verwerken zonder gevoelige geheimvelden te verzamelen.",
-        descriptionEn:
-          "Agencies can share bilingual intake forms, review responses and process approved preferences without requesting confidential account details.",
-      },
-      {
-        kind: "new",
-        title: "Offline dagoverzicht en uitgaven",
-        titleEn: "Offline daily view and expenses",
-        description:
-          "Bewaar bewust een beperkt reispakket voor onderweg, bekijk dagen zonder verbinding en synchroniseer nieuwe uitgaven na herstel van internet.",
-        descriptionEn:
-          "Explicitly save a limited trip pack for the road, view travel days without a connection and synchronise new expenses once internet access returns.",
-      },
-      {
-        kind: "new",
-        title: "Klantintake en herbruikbare Agency-content",
-        titleEn: "Client intake and reusable Agency content",
-        description:
-          "Reisorganisaties kunnen tweetalige formulieren uitsturen, antwoorden gecontroleerd verwerken en versiebeheer gebruiken voor content in reizen en offertes.",
-        descriptionEn:
-          "Travel organisations can send bilingual forms, process responses in a controlled way and use versioned content in trips and quotes.",
-      },
-      {
-        kind: "secure",
-        title: "Offline met minimale gegevens",
-        titleEn: "Offline with minimal data",
-        description:
-          "De lokale reiskopie bevat alleen route, planning en praktische gegevens. Documenten, boekingscodes en bestaande bedragen blijven buiten het offline pakket en uitloggen wist de kopie.",
-        descriptionEn:
-          "The local trip copy only contains route, itinerary and practical details. Documents, booking references and existing amounts stay outside the offline pack, and signing out clears the copy.",
-      },
-      {
-        kind: "new",
-        title: "Agency-contentbibliotheek",
-        titleEn: "Agency content library",
-        description:
-          "Beheer herbruikbare, tweetalige reiscontent met rollen, versies en broninformatie en voeg die gecontroleerd toe aan reizen en offertes.",
-        descriptionEn:
-          "Manage reusable bilingual travel content with roles, versions and source information, then apply it to trips and quotes in a controlled way.",
-      },
-      {
-        kind: "improved",
-        title: "Portal, mobiel en accountbeveiliging",
-        titleEn: "Portal, mobile and account security",
-        description:
-          "Publieke website en accountportaal zijn duidelijk gescheiden, mobiele navigatie is aangescherpt en Google, Discord, passkeys en TOTP sluiten aan op dezelfde accountomgeving.",
-        descriptionEn:
-          "The public website and account portal are clearly separated, mobile navigation is refined, and Google, Discord, passkeys and TOTP connect to the same account environment.",
-      },
-    ],
-  },
-  {
-    id: "2026-09-21-communication-reliability",
-    version: "Beta 0.8",
-    publishedAt: "2026-09-21T20:30:00+02:00",
-    title: "Betrouwbare communicatie en betalingen",
-    titleEn: "Reliable communication and payments",
-    summary:
-      "Verbeteringen voor mailopmaak, vertaling, betalingen en agenda zijn in de beta beschikbaar. De bestaande mailbezorging blijft via ZXCS lopen.",
-    summaryEn:
-      "Improvements to email formatting, translation, payments and calendars are available in beta. Existing email delivery continues through ZXCS.",
-    changes: [
-      {
-        kind: "improved",
-        title: "Professionele bedrijfsmail",
-        titleEn: "Professional company email",
-        description:
-          "Bedrijfsmail gebruikt veilige HTML, een herkenbare handtekening en behoudt opmaak en bijlagen bij opnieuw bezorgen.",
-        descriptionEn:
-          "Company email uses safe HTML, a recognisable signature and preserves formatting and attachments when retried.",
-      },
-      {
-        kind: "new",
-        title: "Vertaalconcepten met controle",
-        titleEn: "Translation drafts with review",
-        description:
-          "Feedback, meldingen, onderhoud, recensies en bedrijfsmail kunnen tussen Nederlands en Engels als controleerbaar concept worden vertaald.",
-        descriptionEn:
-          "Feedback, notices, maintenance, testimonials and company email can be translated between Dutch and English as reviewable drafts.",
-      },
-      {
-        kind: "fixed",
-        title: "Betaling en live agenda hersteld",
-        titleEn: "Payments and live calendars restored",
-        description:
-          "Betaalrechten, gelokaliseerde betaalmeldingen en live agenda-abonnementen zijn na de productie-uitrol gecontroleerd.",
-        descriptionEn:
-          "Payment entitlements, localised payment notices and live calendar subscriptions were verified after the production rollout.",
-      },
-    ],
-  },
-  {
-    id: "2026-09-21-trip-polish",
-    version: "Beta 0.7",
-    publishedAt: "2026-09-21T12:00:00+02:00",
-    title: "Reizen delen en exporteren",
-    titleEn: "Share and export trips",
-    summary: "Verbeteringen die in de actieve beta zijn bevestigd.",
-    summaryEn: "Improvements confirmed in the active beta.",
-    changes: [
-      {
-        kind: "improved",
-        title: "Overzichtelijke openbare reispagina",
-        titleEn: "Clearer public trip page",
-        description: "De gedeelde reis toont de planning leesbaarder.",
-        descriptionEn: "Shared trips present the itinerary more clearly.",
-      },
-      {
-        kind: "fixed",
-        title: "GPX en losse agenda-export",
-        titleEn: "GPX and one-time calendar export",
-        description:
-          "GPX-download en losse ICS-export werkten vanaf deze beta; de live abonnementlink was in deze release nog in onderzoek.",
-        descriptionEn:
-          "GPX download and one-time ICS export worked from this beta; the live subscription link was still under investigation in this release.",
-      },
-      {
-        kind: "fixed",
-        title: "Uitgaven en bedrijfsbeheer",
-        titleEn: "Expenses and corporate management",
-        description:
-          "De tekst bij 'betaald door' past weer in de knop en bedrijfsbeheerderaccounts kunnen worden opgeslagen.",
-        descriptionEn:
-          "The paid-by label fits its button and corporate administrator accounts can be saved.",
-      },
-    ],
-  },
-  {
-    id: "2026-09-15-payments-calendar",
-    version: "Beta 0.6",
-    publishedAt: "2026-09-15T16:00:00+02:00",
-    title: "Betalen en agenda",
-    titleEn: "Payments and calendar",
-    summary:
-      "Paddle-checkout, facturen en agenda-export zijn samengebracht in één duidelijke productupdate.",
-    summaryEn:
-      "Paddle checkout, invoices and calendar export are combined in one clear product update.",
-    changes: [
-      {
-        kind: "new",
-        title: "Maandelijks of één losse maand",
-        titleEn: "Monthly or one-time month",
-        description:
-          "Pro en Agency ondersteunen een doorlopend abonnement en een losse maand zonder automatische verlenging.",
-        descriptionEn:
-          "Pro and Agency support a recurring subscription and a one-time month without automatic renewal.",
-      },
-      {
-        kind: "new",
-        title: "Facturen en abonnement beheren",
-        titleEn: "Manage invoices and subscriptions",
-        description:
-          "Betalingen lopen via Paddle en het klantportaal geeft toegang tot facturen, betaalmethode en opzegging.",
-        descriptionEn:
-          "Payments use Paddle and the customer portal provides invoices, payment methods and cancellation.",
-      },
-      {
-        kind: "improved",
-        title: "Agenda exporteren",
-        titleEn: "Export your calendar",
-        description:
-          "Een reisplanning kan als los ICS-bestand worden gebruikt; live agenda-abonnementen worden tijdens de beta verder getest.",
-        descriptionEn:
-          "A trip schedule can be used as an ICS file; live calendar subscriptions continue to be tested during beta.",
-      },
-    ],
-  },
-  {
-    id: "2026-09-14-access-communication",
-    version: "Beta 0.5",
-    publishedAt: "2026-09-14T23:55:00+02:00",
-    title: "Toegang en communicatie",
-    titleEn: "Access and communication",
-    summary:
-      "Accountbeveiliging, servicemail, privacyverzoeken en bedrijfsmail kregen één samenhangende basis.",
-    summaryEn:
-      "Account security, service email, privacy requests and company email received one coherent foundation.",
-    changes: [
-      {
-        kind: "secure",
-        title: "Meer veilige inlogmethoden",
-        titleEn: "More secure sign-in methods",
-        description:
-          "Naast e-mail ondersteunt GlobeTrotr Google, Discord, passkeys en authenticatorcodes.",
-        descriptionEn:
-          "Alongside email, GlobeTrotr supports Google, Discord, passkeys and authenticator codes.",
-      },
-      {
-        kind: "improved",
-        title: "Communicatievoorkeuren",
-        titleEn: "Communication preferences",
-        description:
-          "Gebruikers kiezen welke uitnodigingen, reisupdates en betaalberichten zij per e-mail ontvangen.",
-        descriptionEn:
-          "Users choose which invitations, trip updates and payment messages they receive by email.",
-      },
-      {
-        kind: "new",
-        title: "Privacyverzoeken volgen",
-        titleEn: "Track privacy requests",
-        description: "Privacyverzoeken kunnen vanuit het account worden ingediend en gevolgd.",
-        descriptionEn: "Privacy requests can be submitted and tracked from the account.",
-      },
-      {
-        kind: "new",
-        title: "Bedrijfsmail en postvakken",
-        titleEn: "Company email and mailboxes",
-        description:
-          "Bevoegde medewerkers kunnen gedeelde en persoonlijke postvakken met een vaste handtekening gebruiken.",
-        descriptionEn:
-          "Authorised staff can use shared and personal mailboxes with a consistent signature.",
-      },
-    ],
-  },
-  {
-    id: "2026-09-14-travel-tools",
-    version: "Beta 0.4",
-    publishedAt: "2026-09-14T12:00:00+02:00",
-    title: "Meer gereedschap voor onderweg",
-    titleEn: "More tools for the road",
-    summary:
-      "Reisstatistieken, taken, exports en een rustiger dagoverzicht maken lange reizen overzichtelijker.",
-    summaryEn:
-      "Trip statistics, tasks, exports and a calmer daily view make longer trips easier to manage.",
-    changes: [
-      {
-        kind: "new",
-        title: "Reisstatistieken en budgettempo",
-        titleEn: "Trip statistics and budget pace",
-        description:
-          "Bekijk reisdagen, landen, boekingen, uitgaven per categorie en de verwachte budgetontwikkeling.",
-        descriptionEn:
-          "See travel days, countries, bookings, spending by category and projected budget progress.",
-      },
-      {
-        kind: "new",
-        title: "Taken en Vandaag",
-        titleEn: "Tasks and Today",
-        description:
-          "Verdeel reistaken en bekijk onderweg alleen wat voor de huidige dag van belang is.",
-        descriptionEn:
-          "Assign trip tasks and see only what matters for the current day while travelling.",
-      },
-      {
-        kind: "improved",
-        title: "Route en reisversies",
-        titleEn: "Route and trip versions",
-        description:
-          "Keer een route om, maak een conceptkopie en vergelijk route, boekingen en budget.",
-        descriptionEn:
-          "Reverse a route, create a draft copy and compare route, bookings and budget.",
-      },
-    ],
-  },
-  {
-    id: "2026-09-12-agency-operations",
-    version: "Beta 0.3",
-    publishedAt: "2026-09-12T20:00:00+02:00",
-    title: "Agency als werkruimte",
-    titleEn: "Agency as a workspace",
-    summary:
-      "Reisorganisaties beheren klanten, offertes, teamrechten en branding vanuit één omgeving.",
-    summaryEn:
-      "Travel organisations manage clients, quotes, team permissions and branding from one workspace.",
-    changes: [
-      {
-        kind: "new",
-        title: "Klanten en offertes",
-        titleEn: "Clients and quotes",
-        description:
-          "Maak offertes met varianten, deel ze veilig en zet een geaccepteerd voorstel om naar een reis.",
-        descriptionEn:
-          "Create quotes with variants, share them securely and convert an accepted proposal into a trip.",
-      },
-      {
-        kind: "secure",
-        title: "Rollen en audit",
-        titleEn: "Roles and audit",
-        description: "Teamrechten begrenzen toegang en belangrijke beheeracties worden vastgelegd.",
-        descriptionEn:
-          "Team permissions restrict access and important administrative actions are recorded.",
-      },
-      {
-        kind: "improved",
-        title: "Eigen uitstraling",
-        titleEn: "Custom branding",
-        description:
-          "Agency-reizen gebruiken een organisatienaam, accentkleur en gecontroleerde domeinkoppeling.",
-        descriptionEn:
-          "Agency trips use an organisation name, accent colour and verified domain connection.",
-      },
-    ],
-  },
-  {
-    id: "2026-09-10-public-beta",
-    version: "Beta 0.2",
-    publishedAt: "2026-09-10T18:00:00+02:00",
-    title: "Publieke beta en beheer",
-    titleEn: "Public beta and administration",
-    summary:
-      "De publieke website, feedbackstroom en Corporate Admin zijn klaargemaakt voor een beheerste beta.",
-    summaryEn:
-      "The public website, feedback flow and Corporate Admin were prepared for a controlled beta.",
-    changes: [
-      {
-        kind: "new",
-        title: "Feedback en bekende problemen",
-        titleEn: "Feedback and known issues",
-        description:
-          "Testers kunnen feedback indienen en beheerders volgen problemen, reacties en productstatus.",
-        descriptionEn:
-          "Testers can submit feedback while administrators track issues, replies and product status.",
-      },
-      {
-        kind: "improved",
-        title: "Duidelijkere website",
-        titleEn: "Clearer website",
-        description:
-          "Product, prijzen, contact, status, roadmap en juridische informatie hebben ieder een duidelijke plek.",
-        descriptionEn:
-          "Product, pricing, contact, status, roadmap and legal information each have a clear place.",
-      },
-      {
-        kind: "secure",
-        title: "Europese infrastructuur en privacy",
-        titleEn: "European infrastructure and privacy",
-        description:
-          "De website legt primaire opslag in Frankfurt, Duitse applicatieservers en privacykeuzes uit.",
-        descriptionEn:
-          "The website explains primary storage in Frankfurt, German application servers and privacy choices.",
-      },
-    ],
-  },
-  {
-    id: "2026-09-07-core-planner",
-    version: "Beta 0.1",
-    publishedAt: "2026-09-07T23:34:00+02:00",
-    title: "De reisplanner staat",
-    titleEn: "The trip planner is ready",
-    summary:
-      "De basis voor gezamenlijk plannen, boeken, uitgaven bijhouden en reizen delen is beschikbaar.",
-    summaryEn:
-      "The foundation for planning together, tracking bookings and expenses, and sharing trips is available.",
-    changes: [
-      {
-        kind: "new",
-        title: "Planning en route",
-        titleEn: "Planning and route",
-        description: "Bestemmingen, dagplanning, boekingen en routekaart komen samen in één reis.",
-        descriptionEn:
-          "Destinations, daily planning, bookings and the route map come together in one trip.",
-      },
-      {
-        kind: "new",
-        title: "Uitgaven en verrekening",
-        titleEn: "Expenses and settlement",
-        description: "Houd uitgaven in meerdere valuta bij en bereken wie nog aan wie betaalt.",
-        descriptionEn: "Track expenses in multiple currencies and calculate who still owes whom.",
-      },
-      {
-        kind: "secure",
-        title: "Samenwerken met rollen",
-        titleEn: "Collaborate with roles",
-        description: "Eigenaar, reiziger, kijker en financiële rollen krijgen passende toegang.",
-        descriptionEn: "Owner, traveller, viewer and finance roles receive appropriate access.",
-      },
-    ],
-  },
+    {
+        id: "2026-11-07-homepage-trust", version: "1.0.41", publishedAt: "2026-11-07T16:08:42Z",
+        title: "Meer inzicht in de bescherming van je reisplannen", titleEn: "More insight into how your travel plans are protected",
+        summary: "Een beknopte toelichting op de uitgevoerde beveiligingscontroles, naast de bestaande privacyinformatie op de homepage.",
+        summaryEn: "A concise explanation of the security checks performed, alongside the existing privacy information on the homepage.",
+        changes: [
+            { kind: "improved", title: "Beveiligingscontroles helder toegelicht", titleEn: "Security checks explained clearly",
+                description: "De homepage benoemt de uitgevoerde security-audit, controle van toegangsbeveiliging en scans van code en afhankelijkheden. De bestaande reisfuncties en privacyinformatie blijven behouden.",
+                descriptionEn: "The homepage describes the security audit, access control review and scans of code and dependencies. Existing travel features and privacy information are retained." },
+        ],
+    },
+    {
+        id: "2026-11-07-security-reliability", version: "1.0.40", publishedAt: "2026-11-07T13:18:19Z",
+        title: "Betere bescherming van je reisgegevens", titleEn: "Stronger protection for your travel data",
+        summary: "Verbeterde toegangscontrole, veiligere bijlagen en betrouwbaardere verwerking van berichten en abonnementen.",
+        summaryEn: "Improved access controls, safer attachments and more reliable processing of messages and subscriptions.",
+        changes: [
+            { kind: "secure", title: "Toegang tot gedeelde reisgegevens aangescherpt", titleEn: "Tighter access to shared travel data",
+                description: "Reisrollen, organisatierechten en toegang tot afbeeldingen en documenten worden consequenter gecontroleerd. Bestaande reisplannen blijven behouden.",
+                descriptionEn: "Travel roles, organisation permissions and access to images and documents are checked more consistently. Existing itineraries are preserved." },
+            { kind: "improved", title: "Zorgvuldiger omgaan met onzekere berichtaflevering", titleEn: "More careful handling of uncertain message delivery",
+                description: "Bij een onzekere afleveruitkomst wordt een bericht voor controle vastgehouden in plaats van automatisch opnieuw verzonden.",
+                descriptionEn: "When delivery is uncertain, a message is held for review instead of being sent again automatically." },
+            { kind: "fixed", title: "Betere controle op abonnementen en installaties", titleEn: "Better checks for subscriptions and installations",
+                description: "De verwerking van betaalupdates, terugbetalingen en installatielimieten is aangescherpt om tegenstrijdige of gelijktijdige updates beter af te handelen.",
+                descriptionEn: "Payment updates, refunds and installation limits receive stronger checks to handle conflicting or concurrent updates more reliably." },
+        ],
+    },
+    {
+        id: "2026-10-29-booking-documents-empty-planning", version: "1.0.39", publishedAt: "2026-10-29T12:59:17Z",
+        title: "Reisdocumenten bij je boekingen", titleEn: "Travel documents alongside your bookings",
+        summary: "Voeg documenten toe aan je boekingen en bekijk ze direct vanuit je schema. Nieuwe reizen starten met een lege planning.",
+        summaryEn: "Attach documents to your bookings and view them directly from your schedule. New trips start with an empty itinerary.",
+        changes: [
+            { kind: "new", title: "Document toevoegen vanuit je boeking", titleEn: "Add a document from your booking",
+                description: "Voeg bij een opgeslagen boeking een PDF of afbeelding toe in een apart venster. Kies het documenttype en eventueel een vervaldatum. Je andere boekingswijzigingen blijven bewaard.",
+                descriptionEn: "Attach a PDF or image to a saved booking in a separate window. Choose its document type and an optional expiry date. Your other booking edits are retained." },
+            { kind: "new", title: "Documenten bekijken in de app", titleEn: "View documents in the app",
+                description: "Open gekoppelde documenten vanuit Schema, je boekingslijst of Documenten. PDF's en afbeeldingen worden in de app getoond zonder automatische download; een nieuw tabblad en downloaden blijven beschikbaar.",
+                descriptionEn: "Open linked documents from Schedule, your booking list or Documents. PDFs and images appear in the app without an automatic download; opening a new tab and downloading remain available." },
+            { kind: "fixed", title: "Nieuwe reizen beginnen zonder voorbeeldactiviteiten", titleEn: "New trips start without sample activities",
+                description: "De dagplanning wordt niet meer automatisch gevuld met voorbeeldactiviteiten. Je gekozen reistype blijft behouden en bestaande reisplannen worden niet gewijzigd.",
+                descriptionEn: "The itinerary is no longer filled with sample activities automatically. Your chosen trip type is retained and existing travel plans remain unchanged." },
+        ],
+    },
+    {
+        id: "2026-10-28-address-search-reliability", version: "1.0.38", publishedAt: "2026-10-28T20:01:17Z",
+        title: "Betrouwbaarder zoeken en adressen aanpassen", titleEn: "More reliable search and address editing",
+        summary: "Zoek adressen gerichter en pas je adres aan met behoud van het gekozen kaartpunt.",
+        summaryEn: "Search addresses more precisely and edit your address while keeping the selected map point.",
+        changes: [
+            { kind: "fixed", title: "Gerichter zoeken naar locaties", titleEn: "More precise location searches",
+                description: "Adreszoeken gebruikt straat, plaats en land zonder je persoonlijke locatienaam als zoekvoorwaarde. Oude resultaten verdwijnen bij nieuwe invoer; lege resultaten en fouten krijgen duidelijke uitleg. Ook korte plaatsnamen werken.",
+                descriptionEn: "Address searches use street, town and country without requiring your personal location name. Old results clear when you change the query; empty results and errors have clear explanations. Short place names work too." },
+            { kind: "fixed", title: "Adres aanpassen houdt je kaartpunt vast", titleEn: "Address edits keep your map point",
+                description: "Wijzig naam, adres, stad of land zonder je gekozen kaartpunt te verliezen. Coördinaten accepteren een komma of punt en worden pas na bevestiging toegepast. Je boeking, routevolgorde en adressen in GPX en offline blijven behouden.",
+                descriptionEn: "Edit the name, address, town or country without losing your selected map point. Coordinates accept a comma or dot and apply only after confirmation. Your booking, route order and addresses in GPX and offline are preserved." },
+            { kind: "improved", title: "Rustiger herstellen bij zoek- en kaartproblemen", titleEn: "Easier recovery from search and map issues",
+                description: "Annuleer een trage zoekactie of probeer opnieuw zonder invoer te verliezen. Late antwoorden overschrijven je nieuwe keuze niet en het bewerkvenster behoudt één kaart en één marker.",
+                descriptionEn: "Cancel a slow search or retry without losing your input. Late responses do not overwrite your new choice, and the editor keeps one map and one marker." },
+        ],
+    },
+    {
+        id: "2026-10-28-compact-destination-editing", version: "1.0.37", publishedAt: "2026-10-28T19:11:10Z",
+        title: "Compactere bestemmingen", titleEn: "More compact destinations",
+        summary: "Eén potlood bij de datum opent datum en adres, zonder extra regels in de bestemmingslijst.",
+        summaryEn: "One pencil beside the date opens date and address editing, without extra rows in the destination list.",
+        changes: [{ kind: "improved", title: "Datum en adres achter één potlood", titleEn: "Date and address behind one pencil",
+                description: "De aparte adresknop is verdwenen. Via het potlood bij de datum pas je de datum en zo nodig de locatie aan. Het adres blijft uit de lijst; samen wijzigen wordt in één keer opgeslagen.",
+                descriptionEn: "The separate address button is gone. Use the pencil beside the date to edit the date and, when needed, the location. Addresses stay out of the list; combined edits are saved together." }],
+    },
+    {
+        id: "2026-10-28-manual-locations-addresses", version: "1.0.36", publishedAt: "2026-10-28T18:36:47Z",
+        title: "Locaties en adressen bij je boekingen", titleEn: "Locations and addresses for your bookings",
+        summary: "Voer locaties zelf in, controleer adresvoorstellen en neem je adressen mee in GPX en offline.",
+        summaryEn: "Enter locations manually, review suggested addresses and take addresses with you in GPX and offline.",
+        changes: [
+            { kind: "new", title: "Locaties zelf invoeren", titleEn: "Enter locations manually",
+                description: "Vul naam, adres, plaats en land in bij boekingen en routebestemmingen. Kies het juiste kaartpunt en bevestig je invoer voordat je de boeking opslaat.",
+                descriptionEn: "Enter name, address, city and country for bookings and route destinations. Choose the correct map point and confirm your details before saving the booking." },
+            { kind: "improved", title: "Adresvoorstellen controleren", titleEn: "Review suggested addresses",
+                description: "Vraag bij een bestaande locatie een adresvoorstel van OpenStreetMap op. Controleer het voordat je het overneemt; naam en kaartpunt blijven behouden. Gevonden hotels gebruiken hun eigen kaartpunt.",
+                descriptionEn: "Look up an OpenStreetMap address suggestion for an existing location. Review it before applying; the name and map point are kept. Found hotels use their own map point." },
+            { kind: "improved", title: "Adressen mee op reis", titleEn: "Take addresses with you",
+                description: "Adressen staan bij boekingen en gaan mee in agenda, GPX en vernieuwde offlinepakketten. Boekingswaypoints veranderen je routevolgorde niet; terugbezoeken blijven behouden.",
+                descriptionEn: "Addresses appear with bookings and are included in calendar, GPX and refreshed offline packs. Booking waypoints do not change your route order; return visits are preserved." },
+        ],
+    },
+    {
+        id: "2026-10-28-flight-connections-and-known-days", version: "1.0.35", publishedAt: "2026-10-28T15:35:10Z",
+        title: "Aansluitende vluchten en bekende reisdagen", titleEn: "Connecting flights and known travel days",
+        summary: "Heen- en terugvluchten staan in de juiste reisrichting. Luchthavens behouden hun geboekte naam en beide bekende boekingsdagen blijven zichtbaar.",
+        summaryEn: "Outbound and return flights follow the correct travel direction. Airports retain their booked name and both known booking days remain visible.",
+        changes: [
+            { kind: "fixed", title: "Terugvluchten na je verblijfsroute", titleEn: "Return flights after your stay",
+                description: "Een terugvlucht via een eerder bezocht vliegveld verschijnt na je verblijf. Aansluitende vluchten blijven in reisrichting staan, ook wanneer ze zonder tijden in een andere volgorde zijn ingevoerd.",
+                descriptionEn: "A return flight through a previously visited airport appears after your stay. Connecting flights remain in travel direction, including when entered in a different order without times." },
+            { kind: "fixed", title: "Luchthavennaam in plaats van omliggende gemeente", titleEn: "Airport name instead of the surrounding municipality",
+                description: "Vervoer toont het beschikbare geboekte luchthavenlabel in plaats van een gemeente uit locatieherkenning. Je oorspronkelijke boekingsgegevens en coördinaten blijven behouden.",
+                descriptionEn: "Transport shows the available booked airport label instead of a municipality from location lookup. Your original booking details and coordinates are preserved." },
+            { kind: "improved", title: "Alle bekende boekingsdagen bij je bestemming", titleEn: "All known booking days at your destination",
+                description: "Bij hetzelfde vliegveld op de heen- en terugreis zie je beide dagen. In de datumeditor kun je een bekende dag kiezen. Een bestaande handmatige aankomstdatum verandert pas wanneer je zelf opslaat.",
+                descriptionEn: "An airport used on both outbound and return journeys shows both days. You can choose a known day in the date editor. An existing manual arrival date changes only when you save it." },
+        ],
+    },
+    {
+        id: "2026-10-28-clear-destinations-and-matching-places", version: "1.0.34", publishedAt: "2026-10-28T14:46:28Z",
+        title: "Rustigere bestemmingen en herkenbare reislocaties", titleEn: "Clearer destinations and matching travel locations",
+        summary: "Bestemmingen zijn beter leesbaar, dezelfde luchthaven of hetzelfde station krijgt geen onnodige tussenrit en updates staan overzichtelijk bij elkaar.",
+        summaryEn: "Destinations are easier to read, matching airports and stations no longer create unnecessary transfers, and updates are grouped clearly.",
+        changes: [
+            { kind: "improved", title: "Meer ruimte voor plaatsnamen en datums", titleEn: "More room for place names and dates",
+                description: "Plaatsnamen hebben een eigen regel. Een potloodje en markering maken duidelijk dat je de datum kunt wijzigen. Een eenduidige datum uit een gekoppelde boeking staat alvast ingevuld als voorstel; opslaan bevestigt deze als bestemmingsdatum.",
+                descriptionEn: "Place names have their own row. A pencil icon and highlight show that the date can be edited. An unambiguous date from a linked booking is prefilled as a suggestion; saving confirms it as the destination date." },
+            { kind: "fixed", title: "Dezelfde luchthaven of hetzelfde station herkennen", titleEn: "Recognising the same airport or station",
+                description: "Varianten zoals Schiphol en Amsterdam Schiphol, of Centraal en Central Station, komen samen wanneer naam en locatie overeenkomen. Echte ritten tussen stad, station en luchthaven blijven apart. Je oorspronkelijke boekingsgegevens blijven behouden.",
+                descriptionEn: "Variants such as Schiphol and Amsterdam Schiphol, or Centraal and Central Station, connect when their name and location agree. Actual transfers between cities, stations and airports remain separate. Your original booking details are preserved." },
+            { kind: "improved", title: "Updates gebundeld, geschiedenis bewaard", titleEn: "Grouped updates with history preserved",
+                description: "Wat is er nieuw groepeert de voorgeschiedenis in zes overzichtelijke updates. Alle oorspronkelijke versies en toelichtingen blijven uitklapbaar beschikbaar.",
+                descriptionEn: "What’s new groups the history into six clear updates. Every original version and explanation remains available in the expandable history." },
+            { kind: "improved", title: "Rustiger tijdlabels in het reisschema", titleEn: "Clearer time labels in the schedule",
+                description: "Er staat meer ruimte tussen klok en tijd; tijdlijnpictogrammen staan gecentreerd. Zoekresultaten tonen ook een herkenbaar icoon en locatietype, zoals luchthaven, treinstation of straat.",
+                descriptionEn: "The clock and time have more spacing, and timeline icons are centred. Search results also show a recognisable icon and location type, such as airport, train station or street." },
+        ],
+    },
+    {
+        id: "2026-10-28-destination-dates-and-transport-times", version: "1.0.33", publishedAt: "2026-10-28T13:41:10Z",
+        title: "Bestemmingsdatums en vervoerstijden aanpassen", titleEn: "Edit destination dates and transport times",
+        summary: "Wijzig de datum van een bestemming en voeg vertrek- en aankomsttijden toe aan trein- en busreizen. Boekingsnamen en kaartverbindingen zijn duidelijker.",
+        summaryEn: "Change a destination’s date and add departure and arrival times to train and bus journeys. Booking names and map connections are clearer.",
+        changes: [
+            { kind: "improved", title: "Datum per bestemming wijzigen", titleEn: "Change each destination’s date",
+                description: "Met de kalenderknop naast een bestemming pas je de aankomstdatum aan of verwijder je die. De reisvolgorde, nachten en geboekte onderdelen blijven behouden.",
+                descriptionEn: "Use the calendar button beside a destination to edit or remove its arrival date. Trip order, nights and booked items are preserved." },
+            { kind: "improved", title: "Vertrek- en aankomsttijden voor vervoer", titleEn: "Departure and arrival times for transport",
+                description: "Trein, bus en ander vervoer hebben optionele vertrek- en aankomsttijden. Ze blijven bij bewerken behouden en zijn zichtbaar in de boekingen en het reisschema, ook bij aankomst op een latere dag.",
+                descriptionEn: "Trains, buses and other transport have optional departure and arrival times. They are retained when editing and appear in bookings and the schedule, including arrivals on a later day." },
+            { kind: "fixed", title: "Duidelijke naam bij boekingen", titleEn: "Clear booking names",
+                description: "Het vluchtveld heet nu Naam vlucht. Een ontbrekende naam of datum wordt bij het juiste veld gemeld en uitgelicht, met behoud van je invoer.",
+                descriptionEn: "The flight field is now called Flight name. A missing name or date is reported and focused at the corresponding field, while keeping your entries." },
+            { kind: "fixed", title: "Juiste aansluiting bij terugbezoeken", titleEn: "Correct connections for return visits",
+                description: "Oudere reizen met afwijkende datums krijgen geen automatische aansluiting naar een verre plaats. Heen- en terugbezoeken blijven afzonderlijk gekoppeld; gedeelde kaartmarkeringen tonen beide routenummers.",
+                descriptionEn: "Older trips with inconsistent dates no longer get an automatic connection to a distant place. Outbound and return visits keep separate links; shared map markers show both route numbers." },
+        ],
+    },
+    {
+        id: "2026-10-28-complete-route-map-review", version: "1.0.32", publishedAt: "2026-10-28T12:46:00Z",
+        title: "Je route blijft overal in dezelfde volgorde", titleEn: "Your route stays in the same order everywhere",
+        summary: "Kaart, bestemmingen en vervoersetappes volgen dezelfde reisvolgorde, ook na toevoegen, verwijderen en verplaatsen.",
+        summaryEn: "The map, destinations and transport stages follow the same trip order, including after adding, removing and moving places.",
+        changes: [
+            { kind: "fixed", title: "Vervoer in reisvolgorde", titleEn: "Transport in trip order",
+                description: "Vervoer en navigatie toont de etappes vanaf je eerste bestemming naar je laatste. Oude aankomstdatums zetten de lijst niet meer door elkaar; geboekte aansluitingen blijven bij de juiste etappe staan.",
+                descriptionEn: "Transport and navigation lists stages from your first destination to your last. Old arrival dates no longer mix up the list; booked connections stay with the correct stage." },
+            { kind: "fixed", title: "Betrouwbare kaartverbindingen", titleEn: "Reliable map connections",
+                description: "Toevoegen en verwijderen houden lijnen en nummers bij de actuele bestemmingen. Ook handmatige luchthavenpunten, terugbezoeken en meerdere boekingen tussen dezelfde punten blijven correct zichtbaar.",
+                descriptionEn: "Adding and removing places keeps lines and numbers aligned with the current destinations. Manual airport points, return visits and multiple bookings between the same points remain visible correctly." },
+            { kind: "fixed", title: "Kaart blijft bruikbaar", titleEn: "The map stays usable",
+                description: "Ongeldige locaties breken de kaart niet meer. Aansluitende nachtvluchten gebruiken hun aankomstdatum en snel sluiten tijdens zoomen veroorzaakt geen kaartfout meer.",
+                descriptionEn: "Invalid locations no longer break the map. Connecting overnight flights use their arrival date, and closing quickly while zooming no longer causes a map error." },
+        ],
+    },
+    {
+        id: "2026-10-28-route-map-order", version: "1.0.31", publishedAt: "2026-10-28T11:53:45Z",
+        title: "Kaart volgt je bestemmingsvolgorde", titleEn: "The map follows your destination order",
+        summary: "Verplaatste bestemmingen krijgen de juiste route en nummers op de kaart. Een nieuw laatste routepunt sluit alleen aan op zijn voorganger.",
+        summaryEn: "Moved destinations get the correct route and numbers on the map. A new final route point connects only to its predecessor.",
+        changes: [
+            { kind: "fixed", title: "Dezelfde volgorde in lijst en kaart", titleEn: "Matching list and map order",
+                description: "Na verplaatsen met de pijlen of slepen volgen kaartnummers en verbindingen direct de opgeslagen bestemmingsvolgorde. Aankomstdatums en boekingen blijven behouden.",
+                descriptionEn: "After moving destinations with arrows or dragging, map numbers and connections follow the saved destination order. Arrival dates and bookings are preserved." },
+            { kind: "fixed", title: "Geen waaier van lijnen naar een nieuw eindpunt", titleEn: "No fan of lines to a new endpoint",
+                description: "Een routepunt zonder verblijfsdatum wordt niet meer automatisch als aansluiting voor oude boekingen gebruikt. Geboekte trajecten en expliciet gekozen aansluitingen blijven zichtbaar.",
+                descriptionEn: "A route point without a stay date is no longer automatically used as a transfer for old bookings. Booked journeys and explicitly chosen transfers remain visible." },
+        ],
+    },
+    {
+        id: "2026-10-27-compact-destination-tools", version: "1.0.30", publishedAt: "2026-10-27T22:29:53Z",
+        title: "Rustigere bestemmingbediening", titleEn: "Cleaner destination controls",
+        summary: "Compacte landcodes, favoriete plaatsen via een ster en een duidelijker zoekveld houden je routeoverzicht rustig.",
+        summaryEn: "Compact country codes, a favourites star and a clearer search field keep your route overview tidy.",
+        changes: [
+            { kind: "improved", title: "Landcodes in je bestemmingenlijst", titleEn: "Country codes in your destination list",
+                description: "Een korte code zoals NL of SE vervangt de lange landnaam. De volledige landnaam blijft als uitleg beschikbaar.",
+                descriptionEn: "A short code such as NL or SE replaces the long country name. The full country name remains available as a tooltip." },
+            { kind: "improved", title: "Zoeken en favorieten bij elkaar", titleEn: "Search and favourites together",
+                description: "Open favoriete plaatsen via het sterretje naast Bestemming toevoegen. Het zoekveld heeft meer ruimte, een kortere hint en een ruimere zoekknop.",
+                descriptionEn: "Open favourite places using the star next to Add destination. The search field has more space, a shorter hint and a larger search button." },
+        ],
+    },
+    {
+        id: "2026-10-27-destination-touch-controls", version: "1.0.29", publishedAt: "2026-10-27T22:14:35Z",
+        title: "Bestemmingen makkelijker verplaatsen", titleEn: "Easier destination reordering",
+        summary: "Sleep bestemmingen op je telefoon of gebruik de duidelijkere pijltjes op de computer.",
+        summaryEn: "Drag destinations on your phone or use clearer arrows on your computer.",
+        changes: [
+            { kind: "improved", title: "Slepen met een handvat", titleEn: "Drag using a handle",
+                description: "Op je telefoon sleep je een bestemming via het handvat naar de gewenste positie. De bestemming beweegt mee en de doelpositie wordt gemarkeerd. De pijltjes blijven ook beschikbaar.",
+                descriptionEn: "On your phone, drag a destination by its handle to the desired position. The destination follows your movement and the target is highlighted. The arrows remain available too." },
+            { kind: "improved", title: "Duidelijkere bediening", titleEn: "Clearer controls",
+                description: "Grotere knoppen, duidelijke hover- en toetsenbordmarkering en uitleg bij de pijltjes maken omhoog en omlaag verplaatsen beter herkenbaar.",
+                descriptionEn: "Larger buttons, clear hover and keyboard highlights, and arrow tooltips make moving up and down easier to recognise." },
+        ],
+    },
+    {
+        id: "2026-10-27-destination-motion",
+        version: "1.0.28",
+        publishedAt: "2026-10-27T21:47:28Z",
+        title: "Bestemmingen bewegen mee",
+        titleEn: "Destinations move with you",
+        summary: "Bij het herschikken schuiven bestemmingen kort naar hun nieuwe positie, zodat je de verandering beter kunt volgen.",
+        summaryEn: "When reordering, destinations briefly slide into their new positions so the change is easier to follow.",
+        changes: [
+            { kind: "improved", title: "Vloeiend herschikken", titleEn: "Smooth reordering",
+                description: "De pijltjes verplaatsen bestemmingen met een subtiele schuifbeweging, ook bij meerdere klikken achter elkaar. Opslaan en reisdatums blijven hetzelfde werken.",
+                descriptionEn: "The arrows move destinations with a subtle slide, including repeated clicks. Saving and trip dates keep working as before." },
+            { kind: "improved", title: "Jouw bewegingsvoorkeur", titleEn: "Your motion preference",
+                description: "Bij de systeeminstelling voor minder beweging blijft de wissel direct. Ook met het toetsenbord kun je de pijltjes blijven gebruiken.",
+                descriptionEn: "With your system preference for reduced motion, the change remains immediate. The arrows continue to work with the keyboard." },
+        ],
+    },
+    {
+        id: "2026-10-27-destination-order",
+        version: "1.0.27",
+        publishedAt: "2026-10-27T21:28:01Z",
+        title: "Bestemmingen weer eenvoudig herschikken",
+        titleEn: "Reorder destinations again",
+        summary: "De pijltjes in je bestemmingenlijst volgen nu de opgeslagen volgorde. Ook voorkomen we een onnodig herhaald onderhoudsverzoek bij het openen van de login.",
+        summaryEn: "Destination arrows now follow the saved list order. We also avoid an unnecessary repeated maintenance request when opening sign-in.",
+        changes: [
+            { kind: "fixed", title: "Bestemmingen omhoog en omlaag", titleEn: "Move destinations up and down",
+                description: "Een verplaatste bestemming springt niet meer terug door sortering op aankomstdatum. Datums en boekingen blijven behouden; de kaart en tijdlijn blijven chronologisch.",
+                descriptionEn: "A moved destination no longer jumps back because of arrival-date sorting. Dates and bookings are preserved; the map and timeline remain chronological." },
+            { kind: "improved", title: "Minder dubbele verzoeken", titleEn: "Fewer duplicate requests",
+                description: "Het inlogscherm hergebruikt een recent opgehaalde onderhoudsstatus. De bestaande controle om de tien seconden blijft actief.",
+                descriptionEn: "Sign-in reuses recently fetched maintenance status. The existing ten-second check remains active." },
+        ],
+    },
+    {
+        id: "2026-10-27-optional-public-performance",
+        version: "1.0.26",
+        publishedAt: "2026-10-27T18:21:52Z",
+        title: "Een aparte keuze voor snelheidsmetingen",
+        titleEn: "A separate choice for performance measurements",
+        summary: "Optionele snelheidsmetingen van openbare informatiepagina’s krijgen een eigen privacykeuze, naast Google Analytics.",
+        summaryEn: "Optional performance measurements on public information pages have their own privacy choice, separate from Google Analytics.",
+        changes: [
+            { kind: "new", title: "Snelheidsmetingen alleen na toestemming", titleEn: "Performance measurements only after consent",
+                description: "Wanneer snelheidsmetingen zijn ingeschakeld, kies je zelf of Cloudflare de laadtijd en interacties op vaste openbare informatiepagina’s mag meten. Je bestaande Analytics-keuze zet dit niet automatisch aan.",
+                descriptionEn: "When performance measurements are enabled, you choose whether Cloudflare may measure loading and interactions on fixed public information pages. Your existing Analytics choice does not enable this automatically." },
+            { kind: "secure", title: "Afzonderlijk van je account", titleEn: "Separate from your account",
+                description: "De snelheidskeuze geldt alleen voor deze browser op de openbare website. Reizen, formulieren, postvakken, beheer en de testomgeving vallen buiten deze metingen. Intrekken stopt nieuwe verzending.",
+                descriptionEn: "The performance choice applies only to this browser on the public website. Trips, forms, mailboxes, administration and the test environment are excluded. Withdrawal stops new transmission." },
+        ],
+    },
+    {
+        id: "2026-10-27-development-and-unified-status",
+        version: "1.0.25",
+        publishedAt: "2026-10-27T16:30:21Z",
+        title: "Eén plek voor status en duidelijker beheer",
+        titleEn: "One place for status and clearer administration",
+        summary: "Statuslinks komen samen op de onafhankelijke statuspagina. Ontwikkeltaken en technische foutmeldingen krijgen een duidelijkere plek in beheer.",
+        summaryEn: "Status links lead to the independent status page. Development tasks and technical error reports have clearer places in administration.",
+        changes: [
+            { kind: "improved", title: "Status en incidentupdates bij elkaar", titleEn: "Status and incident updates together",
+                description: "De losse pagina Bekende problemen verwijst voortaan naar de platformstatus. Menu's en hulppagina's verwijzen rechtstreeks naar de onafhankelijke statuspagina.",
+                descriptionEn: "The separate Known issues page now redirects to platform status. Menus and help pages link directly to the independent status page." },
+            { kind: "improved", title: "Ontwikkeltaken onder Development", titleEn: "Development tasks under Development",
+                description: "Bevoegde teamleden vinden ontwikkeltaken, GitHub-koppelingen en taakstatistieken onder Infrastructuur. Incidenten en technische fouten blijven onder Problemen.",
+                descriptionEn: "Authorized team members can find development tasks, GitHub links and task statistics under Infrastructure. Incidents and technical errors remain under Issues." },
+            { kind: "improved", title: "Begrijpelijkere foutregistratie", titleEn: "Clearer error reporting",
+                description: "Het interne foutenoverzicht legt kort uit welke mislukte gebruikersacties worden geregistreerd. Technische details en meldregels staan achter een uitklapbare toelichting.",
+                descriptionEn: "The internal error overview explains which failed user actions are recorded. Technical details and notification rules are available in an expandable explanation." },
+        ],
+    },
+    {
+        id: "2026-10-27-status-and-focused-search",
+        version: "1.0.24",
+        publishedAt: "2026-10-27T12:18:54Z",
+        title: "Gerichter zoeken en een duidelijkere platformstatus",
+        titleEn: "More focused search and clearer platform status",
+        summary: "Minder onnodige zoekverzoeken en duidelijkere informatie op de onafhankelijke statuspagina.",
+        summaryEn: "Fewer unnecessary search requests and clearer information on the independent status page.",
+        changes: [
+            { kind: "improved", title: "Rustiger reizigers zoeken", titleEn: "More focused traveler search",
+                description: "Zoeken wacht kort tot je stopt met typen en gebruikt recente resultaten opnieuw. Bij een andere zoektekst verdwijnen oude resultaten; na een fout kun je opnieuw proberen.",
+                descriptionEn: "Search briefly waits until you stop typing and reuses recent results. Old results disappear when the query changes; after an error you can retry." },
+            { kind: "improved", title: "Duidelijkere statusinformatie", titleEn: "Clearer status information",
+                description: "Diensten krijgen een korte uitleg over hun functie. De statuspagina toont beter leesbare teksten en maakt onderscheid tussen meetgegevens en incidenthistorie.",
+                descriptionEn: "Services have short descriptions of what they do. The status page provides more readable text and distinguishes measurements from incident history." },
+        ],
+    },
+    {
+        id: "2026-10-27-friends-expenses-and-stay-search",
+        version: "1.0.23",
+        publishedAt: "2026-10-27T11:17:53Z",
+        title: "Vrienden beheren en duidelijker reizen plannen",
+        titleEn: "Manage friends and plan trips more clearly",
+        summary: "Verbeteringen voor vriendschapsverzoeken, uitgaven bewerken en beschikbaarheid bij verblijf zoeken.",
+        summaryEn: "Improvements to friend requests, expense editing and availability when searching for stays.",
+        changes: [
+            { kind: "fixed", title: "Verzoeken accepteren en intrekken", titleEn: "Accept and withdraw requests",
+                description: "Beheer ontvangen en verstuurde vriendschapsverzoeken, ook wanneer een deelnemer het openbare profiel uitzet. Zoekresultaten tonen een profielfoto waar beschikbaar en een duidelijke profiellink.",
+                descriptionEn: "Manage received and sent friend requests, including when a participant disables their public profile. Search results show a profile photo where available and a clear profile link." },
+            { kind: "fixed", title: "Zichtbaar uitgaven bewerken", titleEn: "Clearer expense editing",
+                description: "Het potlood brengt het bewerkformulier in beeld. Bij opslaan blijven bestaande bonnen, verdelingen en gekoppelde boekingskosten behouden.",
+                descriptionEn: "The pencil brings the edit form into view. Saving preserves existing receipts, splits and linked booking costs." },
+            { kind: "improved", title: "Duidelijkere verblijfresultaten", titleEn: "Clearer stay search results",
+                description: "Expliciet onbeschikbare verblijven worden gefilterd en onbekende beschikbaarheid blijft herkenbaar. Een lege zoekrespons wordt niet meer automatisch vervangen door ongecontroleerde kaartlocaties.",
+                descriptionEn: "Explicitly unavailable stays are filtered out and unknown availability remains clearly marked. Empty search results are no longer automatically replaced with unverified map locations." },
+            { kind: "improved", title: "Compactere teamdetails", titleEn: "More compact team details",
+                description: "Teamaccount- en mailboxdetails staan achter een uitklapknop. Bestaande beheeracties en belangrijke voortgangs- en foutmeldingen blijven beschikbaar.",
+                descriptionEn: "Team account and mailbox details sit behind an expand button. Existing management actions and important progress and error messages remain available." },
+            { kind: "improved", title: "Gerichtere koersbewaking", titleEn: "More focused exchange-rate monitoring",
+                description: "De onafhankelijke monitor controleert een mislukte koersmeting opnieuw voordat deze als storing wordt geregistreerd. Bevestigde fouten blijven zichtbaar.",
+                descriptionEn: "The independent monitor rechecks a failed exchange-rate measurement before recording an outage. Confirmed failures remain visible." },
+        ],
+    },
+    {
+        id: "2026-10-24-status-and-manual-plans",
+        version: "1.0.21",
+        publishedAt: "2026-10-24T12:22:00+02:00",
+        title: "Duidelijkere status en stabieler accountbeheer",
+        titleEn: "Clearer status and more reliable account management",
+        summary: "Een overzichtelijkere statuspagina, gerichter incidentbeheer en behoud van handmatig toegekende abonnementen.",
+        summaryEn: "A clearer status page, focused incident management and persistent manually assigned plans.",
+        changes: [
+            { kind: "improved", title: "Status in één oogopslag", titleEn: "Status at a glance",
+                description: "Gegroepeerde diensten, gemeten historie en een incidenttijdlijn op de onafhankelijke statuspagina. Ontbrekende metingen blijven herkenbaar onbevestigd.",
+                descriptionEn: "Grouped services, measured history and an incident timeline on the independent status page. Missing measurements remain clearly unconfirmed." },
+            { kind: "fixed", title: "Handmatige abonnementen blijven behouden", titleEn: "Manual plan assignments persist",
+                description: "Bewust toegekende toegang blijft gelden bij automatische controles en opslaan. Beheerders kunnen expliciet terugschakelen naar automatische betaalrechten.",
+                descriptionEn: "Deliberately assigned access is preserved during automated checks and saves. Administrators can explicitly return to payment-based access." },
+            { kind: "improved", title: "Gerichtere storingsmeldingen", titleEn: "More reliable outage alerts",
+                description: "Publieke controles geven trage reacties meer tijd en bevestigen nieuwe storingen over afzonderlijke meetrondes. Incidenten en algemene updates hebben elk een eigen beheerplek.",
+                descriptionEn: "Public checks allow more time for slow responses and confirm new outages across separate rounds. Incidents and general updates have distinct management areas." },
+        ],
+    },
+    {
+        id: "2026-10-23-efficient-background-queues",
+        version: "1.0.20",
+        publishedAt: "2026-10-23T22:55:00+02:00",
+        title: "Efficientere achtergrondverwerking",
+        titleEn: "More efficient background processing",
+        summary: "Rustige achtergrondwachtrijen worden minder vaak gecontroleerd, terwijl mail en meldingen hun bestaande tempo behouden.",
+        summaryEn: "Idle background queues are checked less often while mail and notifications retain their existing cadence.",
+        changes: [
+            { kind: "improved", title: "Minder lege controles", titleEn: "Fewer empty checks",
+                description: "Na herhaaldelijk lege controles wachten achtergrondtaken kort langer. Zodra werk wordt gevonden schakelt de verwerking terug naar het gebruikelijke tempo.",
+                descriptionEn: "After repeatedly empty checks, background queues wait briefly longer. Processing returns to its usual cadence as soon as work is found." },
+        ],
+    },
+    {
+        id: "2026-10-23-node-monitoring-connectivity",
+        version: "1.0.19",
+        publishedAt: "2026-10-23T21:40:00+02:00",
+        title: "Betrouwbaardere serverbewaking",
+        titleEn: "More reliable server monitoring",
+        summary: "De verbinding tussen servers en de onafhankelijke monitor is verbeterd.",
+        summaryEn: "Connectivity between servers and the independent monitor has been improved.",
+        changes: [
+            { kind: "fixed", title: "Betere bereikbaarheid van de monitor", titleEn: "Improved monitor connectivity",
+                description: "De servercontroles identificeren zich herkenbaar bij de monitoringsdienst. Technische fouten zijn gerichter te onderzoeken zonder gevoelige gegevens te publiceren.",
+                descriptionEn: "Server checks identify themselves to the monitoring service. Technical errors can be investigated more precisely without publishing sensitive information." },
+        ],
+    },
+    {
+        id: "2026-10-23-independent-node-status",
+        version: "1.0.18",
+        publishedAt: "2026-10-23T21:10:00+02:00",
+        title: "Meer inzicht in beschikbaarheid",
+        titleEn: "More insight into availability",
+        summary: "De statuspagina ondersteunt afzonderlijke server- en servicecontroles en duidelijkere incidentupdates.",
+        summaryEn: "The status page supports separate server and service checks and clearer incident updates.",
+        changes: [
+            { kind: "improved", title: "Servers en services afzonderlijk zichtbaar", titleEn: "Separate server and service visibility",
+                description: "Serverbereikbaarheid en servicecontroles krijgen een eigen status en historie. Ontbrekende of onbevestigde metingen worden herkenbaar weergegeven.",
+                descriptionEn: "Server reachability and service checks have their own status and history. Missing or unconfirmed measurements remain clearly identified." },
+            { kind: "fixed", title: "Zakelijke incidentafsluiting", titleEn: "Clearer incident closure",
+                description: "De standaardtekst bij afsluiten verwijst naar de actuele beschikbaarheid zonder interne technische werkwijzen te publiceren.",
+                descriptionEn: "Default closure text refers to current availability without publishing internal technical procedures." },
+        ],
+    },
+    {
+        id: "2026-10-23-close-and-rearm-platform-incidents",
+        version: "1.0.17",
+        publishedAt: "2026-10-23T20:20:00+02:00",
+        title: "Incidenten afsluiten en nieuwe storingen herkennen",
+        titleEn: "Close incidents and recognize new failures",
+        summary: "Een afgesloten incident blijft gesloten. Een volgende mislukte controle opent een nieuw incident met een nieuwe melding, terwijl de gemeten beschikbaarheid eerlijk zichtbaar blijft.",
+        summaryEn: "Closed incidents stay closed. A subsequent failed check opens a new incident and alert while measured availability remains visible.",
+        changes: [
+            { kind: "fixed", title: "Afsluiten sluit ook het automatische incident", titleEn: "Closing also closes the automatic incident",
+                description: "Sluit automatische incidenten direct vanuit Corporate Admin. De bestaande historie en meldingsroute blijven behouden. Een late uitslag van een eerdere poll opent het oude incident niet opnieuw.",
+                descriptionEn: "Close automatic incidents directly from Corporate Admin. Existing history and notification delivery remain intact. A late result from an earlier poll does not reopen the old incident." },
+            { kind: "fixed", title: "Bevestigen na een verloren antwoord", titleEn: "Confirming a save after a lost response",
+                description: "Als het opslaan gelukt is maar het antwoord wegvalt, controleert beheer de exacte opgeslagen melding. De afsluiting blijft dan niet onterecht als mislukt openstaan.",
+                descriptionEn: "When saving succeeds but its response is lost, administration checks the exact saved announcement so a completed closure is not incorrectly left open as failed." },
+        ],
+    },
+    {
+        id: "2026-10-23-canonical-exchange-rate-endpoint",
+        version: "1.0.16",
+        publishedAt: "2026-10-23T20:05:00+02:00",
+        title: "Koerscontrole rechtstreeks naar de huidige API",
+        titleEn: "Exchange rate checks use the current API directly",
+        summary: "De app en statuscontroles gebruiken het huidige Frankfurter-endpoint, zodat een domeinredirect niet als koersstoring verschijnt.",
+        summaryEn: "The app and status checks use the current Frankfurter endpoint so a domain redirect is not reported as an exchange rate outage.",
+        changes: [
+            { kind: "fixed", title: "Verouderd API-adres vervangen", titleEn: "Replaced outdated API address",
+                description: "De koerskoppeling, beheercontrole en externe monitor gebruiken hetzelfde actuele v1-endpoint. De bestaande koersstructuur en terugval blijven behouden; de monitor blijft onverwachte domeinwisselingen weigeren.",
+                descriptionEn: "Exchange rate lookup, administration checks and the external monitor use the same current v1 endpoint. Existing rate structure and fallback remain unchanged; the monitor still rejects unexpected domain changes." },
+        ],
+    },
+    {
+        id: "2026-10-23-observed-flight-provider-health",
+        version: "1.0.15",
+        publishedAt: "2026-10-23T19:49:13+02:00",
+        title: "Vluchtbewaking op basis van echte API-resultaten",
+        titleEn: "Flight monitoring based on real API results",
+        summary: "De statuscontrole hergebruikt resultaten uit automatische vluchtbewaking en alertcontroles, zonder extra vluchtzoekopdrachten.",
+        summaryEn: "Status checks reuse results from automated flight monitoring and alert checks without extra flight searches.",
+        changes: [
+            { kind: "improved", title: "Eerlijkere vluchtstatus", titleEn: "More accurate flight status",
+                description: "Een ingestelde sleutel of positief saldo maakt vluchtinformatie niet automatisch groen. Recente geslaagde vluchtrequests, fouten en uitgeput alertsaldo bepalen de gemeten status; zonder voldoende bewijs blijft die onbevestigd.",
+                descriptionEn: "A configured key or positive balance does not automatically mark flight information as operational. Recent successful requests, failures and exhausted alert balance determine observed status; insufficient evidence stays unconfirmed." },
+            { kind: "fixed", title: "Geen providerstoring bij een ontbrekende vlucht", titleEn: "Missing flights do not imply provider outages",
+                description: "Een niet gevonden vlucht wordt onderscheiden van authenticatieproblemen, limieten en providerfouten. Gezondheidscontroles gebruiken geen extra betaalde vluchtzoekopdrachten.",
+                descriptionEn: "A missing flight is distinguished from authentication failures, limits and provider errors. Health checks do not add paid flight searches." },
+        ],
+    },
+    {
+        id: "2026-10-23-status-cache-and-notification-deduplication",
+        version: "1.0.14",
+        publishedAt: "2026-10-23T18:45:00+02:00",
+        title: "Efficientere statuspagina en eenduidige incidentmeldingen",
+        titleEn: "More efficient status page and consistent incident notices",
+        summary: "De actuele platformstatus gebruikt gedeelde caching en een compacte respons. Automatische storingen en handmatige toelichting leveren geen dubbele actieve banners op.",
+        summaryEn: "Current platform status uses shared caching and a compact response. Automatic disruptions and manual context no longer produce duplicate active banners.",
+        changes: [
+            { kind: "improved", title: "Duidelijke status per dienst", titleEn: "Clear status for each service",
+                description: "Online, verminderde werking en offline krijgen herkenbare iconen. Recente updates per dienst verwijzen naar de bestaande incidenten. Gedeeltelijke storingen en herstel beheer je via de bestaande meldingen in Corporate Admin.",
+                descriptionEn: "Online, degraded and offline have recognizable icons. Recent updates per service link to existing incidents. Manage partial outages and recovery through existing notifications in Corporate Admin." },
+            { kind: "improved", title: "Minder herhaald statusverkeer", titleEn: "Less repeated status traffic",
+                description: "Website en beheer gebruiken dezelfde compacte openbare statusrespons. De actuele status en uitgebreide meethistorie worden met verschillende cachetijden opgehaald; de meetfrequentie blijft gelijk.",
+                descriptionEn: "Website and administration use the same compact public status response. Current status and detailed check history use different cache lifetimes; check frequency stays unchanged." },
+            { kind: "fixed", title: "Een actieve banner per incident", titleEn: "One active banner per incident",
+                description: "Een openbare toelichting vervangt de automatische storingsbanner via de bestaande meldingsroute. Ook tijdens cacheverversing verschijnt hetzelfde incident niet nogmaals als los kaartje.",
+                descriptionEn: "Public context replaces the automatic disruption banner through the existing notification flow. The same incident also stays out of duplicate cards while the cache catches up." },
+        ],
+    },
+    {
+        id: "2026-10-23-status-incidents-and-history",
+        version: "1.0.13",
+        publishedAt: "2026-10-23T17:00:00+02:00",
+        title: "Incidentupdates en inzicht in beschikbaarheid",
+        titleEn: "Incident updates and availability history",
+        summary: "De statusomgeving krijgt het vertrouwde GlobeTrotr-logo, een dagelijkse meethistorie en onlinepercentages met meetdekking. Beheer kan publieke incidenten bijhouden.",
+        summaryEn: "The status site gets the familiar GlobeTrotr logo, daily check history and online percentages with coverage. Management can maintain public incidents.",
+        changes: [
+            { kind: "new", title: "Publieke incidenten beheren", titleEn: "Manage public incidents",
+                description: "Via de bestaande platformstatussen in Corporate Admin kan beheer betrokken diensten kiezen en onderzoek en herstel publiceren. Updates blijven bij hetzelfde incident; gemeten storingen worden niet dubbel getoond.",
+                descriptionEn: "Management can use the existing Corporate Admin platform statuses to select affected services and publish investigation and recovery updates. Updates stay in the same incident; measured disruptions are not shown twice." },
+            { kind: "new", title: "Dagelijkse historie met eerlijke percentages", titleEn: "Daily history with accurate percentages",
+                description: "Bekijk zeven of dertig dagen aan gemeten checks. Onlinepercentage en meetdekking staan apart: ontbrekende metingen en dagen vóór registratie worden niet groen ingevuld.",
+                descriptionEn: "View seven or thirty days of recorded checks. Online percentage and coverage are separate: missing checks and days before recording are not filled in as operational." },
+            { kind: "fixed", title: "Het juiste logo op de onafhankelijke statuspagina", titleEn: "Correct logo on the independent status page",
+                description: "De statuspagina gebruikt het bestaande GlobeTrotr-logo en serveert dit zelf, zodat het beeldmerk ook bij uitval van de applicatieservers beschikbaar blijft.",
+                descriptionEn: "The status page uses the existing GlobeTrotr logo and serves it itself, keeping the brand mark available during application server outages." },
+        ],
+    },
+    {
+        id: "2026-10-23-independent-platform-status",
+        version: "1.0.12",
+        publishedAt: "2026-10-23T15:00:00+02:00",
+        title: "Duidelijkere platformstatus en storingshistorie",
+        titleEn: "Clearer platform status and incident history",
+        summary: "De statuspagina gebruikt dezelfde openbare metingen en onderhoudsplanning als de nieuwe onafhankelijke statusomgeving. Niet bevestigde beschikbaarheid blijft herkenbaar.",
+        summaryEn: "The status page uses the same public checks and maintenance schedule as the new independent status site. Unconfirmed availability remains clearly identified.",
+        changes: [
+            {
+                kind: "new",
+                title: "Een onafhankelijke statusomgeving",
+                titleEn: "An independent status site",
+                description: "Beheer kan een aparte statusomgeving activeren die buiten de applicatieservers draait. Publieke diensten worden iedere vijf minuten gecontroleerd, met diepere controles ieder uur en een apart controlepunt voor de monitoring zelf.",
+                descriptionEn: "Management can activate a separate status site hosted outside the application servers. Public services are checked every five minutes, with deeper hourly checks and a separate monitoring heartbeat.",
+            },
+            {
+                kind: "improved",
+                title: "Eerlijke metingen en gemeten verstoringen",
+                titleEn: "Accurate checks and recorded disruptions",
+                description: "Verouderde metingen worden herkenbaar, bekende storingen blijven zichtbaar tot bevestigd herstel en nieuwe verstoringen krijgen een begin- en hersteltijd. Niet gecontroleerde providers worden niet als operationeel getoond.",
+                descriptionEn: "Stale checks are clearly marked, known outages remain visible until confirmed recovery, and new disruptions show start and recovery times. Unmonitored providers are not shown as operational.",
+            },
+            {
+                kind: "fixed",
+                title: "Betrouwbaardere SSO- en mailcontroles",
+                titleEn: "More reliable SSO and mail checks",
+                description: "Veilige redirects van de inlog- en mailpagina worden correct gevolgd. Tijdelijke publieke fouten worden opnieuw gecontroleerd voordat ze als storing worden opgeslagen. De bestaande teammeldingen en mailtemplates blijven behouden.",
+                descriptionEn: "Safe redirects on sign-in and mail pages are followed correctly. Temporary public failures are rechecked before being recorded as outages. Existing team notifications and email templates are preserved.",
+            },
+        ],
+    },
+    {
+        id: "2026-10-23-agency-signin-and-trip-tools",
+        version: "1.0.11",
+        publishedAt: "2026-10-23T01:00:00+02:00",
+        title: "Handige reisknoppen en duidelijker aanmelden",
+        titleEn: "Handy trip tools and clearer sign-in setup",
+        summary: "Je reisjaar, vergelijking en export openen in eigen vensters. Agency toont apart de inrichting van aanmelden op je eigen domein.",
+        summaryEn: "Your travel year, comparison and export open in dedicated windows. Agency shows sign-in setup for your own domain separately.",
+        changes: [
+            {
+                kind: "improved",
+                title: "Reisoverzichten met één klik openen",
+                titleEn: "Open trip summaries with one click",
+                description: "Compacte knoppen met iconen vervangen de brede uitklaprijen. Bekijk je reisjaar, vergelijk twee reizen of download een back-up wanneer je die nodig hebt.",
+                descriptionEn: "Compact buttons with icons replace the wide expandable rows. View your travel year, compare two trips or download a backup when you need it.",
+            },
+            {
+                kind: "improved",
+                title: "Inloginstellingen voor je Agency-domein",
+                titleEn: "Sign-in settings for your Agency domain",
+                description: "Een nieuwe beheerkoppeling kan de terugkeeradressen voor aanmelden automatisch bijwerken na domeinverificatie. Je ziet apart of die instellingen recent gecontroleerd zijn. Eenmalige activering door GlobeTrotr-beheer is nodig.",
+                descriptionEn: "A new management connection can update sign-in return addresses automatically after domain verification. You can see whether those settings have been checked recently. GlobeTrotr management needs to activate the connection once.",
+            },
+        ],
+    },
+    {
+        id: "2026-10-23-portal-agency-refinements",
+        version: "1.0.10",
+        publishedAt: "2026-10-23T00:00:00+02:00",
+        title: "Meer overzicht in je reizen en Agency",
+        titleEn: "Clearer trips and Agency settings",
+        summary: "Een compactere reisomgeving, duidelijkere domeininstellingen en verbeteringen aan aanmelden en bedrijfsmail.",
+        summaryEn: "A more compact trip workspace, clearer domain settings and improvements to sign-in and company mail.",
+        changes: [
+            {
+                kind: "improved",
+                title: "Je reizen en planning eerder in beeld",
+                titleEn: "Your trips and plans come first",
+                description: "Compactere koppen en consistente reiskaarten geven foto's en planning meer ruimte. Budget, reisstatus en belangrijke waarschuwingen staan dichter bij de inhoud.",
+                descriptionEn: "Compact headers and consistent trip cards give photos and plans more room. Budgets, trip status and important notices sit closer to the content.",
+            },
+            {
+                kind: "improved",
+                title: "DNS controleren in ??n venster",
+                titleEn: "Check DNS in one window",
+                description: "Kopieer de benodigde records, bevestig dat je ze hebt toegevoegd en bekijk per record wat klopt of nog ontbreekt. De activatiestatus blijft apart zichtbaar.",
+                descriptionEn: "Copy the required records, confirm you have added them and see which records match or are still missing. Activation progress remains visible separately.",
+            },
+            {
+                kind: "fixed",
+                title: "Verzorgdere Agency-instellingen en branding",
+                titleEn: "More polished Agency settings and branding",
+                description: "De accentkleur heeft direct een voorbeeld. Eigen SMTP blijft optioneel en de instellingen passen beter op smalle schermen. Bij verversen verschijnt je eigen branding zonder tijdelijke standaardheader.",
+                descriptionEn: "The accent colour has an immediate preview. Custom SMTP remains optional and settings fit narrow screens better. Refreshing shows your own branding without a temporary default header.",
+            },
+            {
+                kind: "secure",
+                title: "Inlogmail voor de juiste Agency",
+                titleEn: "Sign-in emails for the right Agency",
+                description: "Agency-inloglinks en herstelmails worden alleen klaargezet bij actieve toegang. Passkeymeldingen geven begrijpelijke uitleg en een vervolgstap.",
+                descriptionEn: "Agency sign-in and recovery emails are queued only for accounts with active access. Passkey messages provide clear guidance and a next step.",
+            },
+            {
+                kind: "fixed",
+                title: "Gedeelde bedrijfsmail automatisch aanmaken",
+                titleEn: "Create shared company mailboxes automatically",
+                description: "Nieuwe gedeelde GlobeTrotr-mailboxen worden automatisch aangemaakt en verbonden. Synchronisatie start zodra de inrichting is afgerond.",
+                descriptionEn: "New shared GlobeTrotr mailboxes are created and connected automatically. Synchronization starts once setup is complete.",
+            },
+        ],
+    },
+    {
+        id: "2026-10-22-agency-domain-automation",
+        version: "1.0.9",
+        publishedAt: "2026-10-22T18:00:00+02:00",
+        title: "Zelf je Agency-domein koppelen",
+        titleEn: "Connect your Agency domain",
+        summary: "Een begeleide koppeling met kopieerbare DNS-records en automatische controles.",
+        summaryEn: "Guided domain setup with copyable DNS records and automatic checks.",
+        changes: [{
+                kind: "improved",
+                title: "Van DNS-records naar een werkend domein",
+                titleEn: "From DNS records to a working domain",
+                description: "Sla je eigen domein op, voeg de getoonde records toe bij je DNS-provider en start de verificatie. De status toont de voortgang. Hoofddomeinen vereisen ALIAS, ANAME of CNAME-flattening bij je provider.",
+                descriptionEn: "Save your domain, add the displayed records at your DNS provider and start verification. The status shows progress. Root domains require ALIAS, ANAME or CNAME flattening at your provider.",
+            }],
+    },
+    {
+        id: "2026-10-22-domain-configuration",
+        version: "1.0.8",
+        publishedAt: "2026-10-22T14:00:00+02:00",
+        title: "Duidelijkere domeininstellingen",
+        titleEn: "Clearer domain settings",
+        summary: "Verbeterde DNS-instructies en controles voor eigen Agency-domeinen, met bijgewerkte privacyinformatie.",
+        summaryEn: "Improved DNS instructions and checks for custom Agency domains, with updated privacy information.",
+        changes: [{
+                kind: "improved",
+                title: "Meer inzicht tijdens het koppelen",
+                titleEn: "A clearer setup process",
+                description: "De instructies maken onderscheid tussen DNS, domeinverificatie en certificaatstatus. Niet-opgeslagen domeinwijzigingen moeten eerst worden opgeslagen voordat je controleert.",
+                descriptionEn: "Instructions distinguish DNS, domain verification and certificate status. Save domain changes before running verification.",
+            }],
+    },
+    {
+        id: "2026-10-22-clearer-public-pages",
+        version: "1.0.7",
+        publishedAt: "2026-10-22T12:00:00+02:00",
+        title: "Meer overzicht en interactie op de website",
+        titleEn: "A clearer, more interactive website",
+        summary: "Een compactere demo, overzichtelijke mogelijkheden en interactieve voorbeeldbegrotingen op de homepage.",
+        summaryEn: "A more focused demo, clearer feature pages and interactive sample budgets on the homepage.",
+        changes: [
+            {
+                kind: "improved",
+                title: "Ontdek de mogelijkheden stap voor stap",
+                titleEn: "Explore features step by step",
+                description: "Kies een onderdeel, bekijk de illustraties en klap extra uitleg open. Herhaalde blokken zijn samengevoegd.",
+                descriptionEn: "Choose a topic, explore the illustrations and expand extra details. Repeated sections have been consolidated.",
+            },
+            {
+                kind: "improved",
+                title: "Een duidelijkere kennismaking",
+                titleEn: "A clearer introduction",
+                description: "De homepage toont gekleurde voorbeeldbegrotingen. Op de demopagina doorloop je één begeleide demo.",
+                descriptionEn: "The homepage features colourful sample budgets. The demo page offers one guided walkthrough.",
+            },
+        ],
+    },
+    {
+        id: "2026-10-22-interface-polish",
+        version: "1.0.6",
+        publishedAt: "2026-10-22T00:00:00+02:00",
+        title: "Een verzorgdere website en soepelere bediening",
+        titleEn: "A more polished website and smoother interactions",
+        summary: "Een compact menu, duidelijkere productvoorbeelden en rustige overgangen op de website en in het portaal.",
+        summaryEn: "A compact menu, clearer product examples and subtle transitions across the website and portal.",
+        changes: [
+            {
+                kind: "improved",
+                title: "Rustiger overzicht op ieder scherm",
+                titleEn: "A cleaner layout on every screen",
+                description: "De mobiele navigatie, kaarten, footer en productvoorbeelden zijn verfijnd. Demo-acties staan netjes uitgelijnd.",
+                descriptionEn: "Mobile navigation, cards, the footer and product examples have been refined. Demo actions are neatly aligned.",
+            },
+            {
+                kind: "improved",
+                title: "Subtiele beweging met aandacht voor toegankelijkheid",
+                titleEn: "Subtle motion with accessibility in mind",
+                description: "Korte overgangen maken navigeren prettiger en volgen je voorkeur voor minder beweging.",
+                descriptionEn: "Brief transitions make navigation smoother and respect your reduced motion preference.",
+            },
+        ],
+    },
+    {
+        id: "2026-10-20-demo-layout",
+        version: "1.0.5",
+        publishedAt: "2026-10-20T00:00:00+02:00",
+        title: "Een rustigere demo-afsluiting",
+        titleEn: "A cleaner finish to the demo",
+        summary: "De abonnementen staan overzichtelijk bij elkaar, met één duidelijke startknop.",
+        summaryEn: "Plans are grouped clearly together, with one main button to get started.",
+        changes: [{
+                kind: "improved",
+                title: "Compact abonnementsoverzicht in de demo",
+                titleEn: "Compact plan overview in the demo",
+                description: "Free, Pro en Agency staan in uitgelijnde kaarten, met minder tekst en een passende indeling op mobiel en desktop.",
+                descriptionEn: "Free, Pro and Agency appear in aligned cards with less text and a layout that adapts to mobile and desktop.",
+            }],
+    },
+    {
+        id: "2026-10-20-language-pages",
+        version: "1.0.4",
+        publishedAt: "2026-10-20T00:00:00+02:00",
+        title: "Website en portaal in jouw taal",
+        titleEn: "Website and portal in your language",
+        summary: "Nederlandse en Engelse websitepagina's met een taalkeuze die aansluit op je account.",
+        summaryEn: "Dutch and English website pages with a language choice that follows your account.",
+        changes: [
+            {
+                kind: "improved",
+                title: "Eigen websiteadressen voor Nederlands en Engels",
+                titleEn: "Separate website addresses for Dutch and English",
+                description: "De homepage, Over, mogelijkheden, reizigers, groepen en prijzen hebben een vaste Nederlandse en Engelse versie.",
+                descriptionEn: "The home, About, features, travellers, groups and pricing pages have dedicated Dutch and English versions.",
+            },
+            {
+                kind: "fixed",
+                title: "Accounttaal en taalwissel blijven gelijk",
+                titleEn: "Consistent account language and language switching",
+                description: "De website volgt je accounttaal wanneer je bent aangemeld. Wisselen, herladen en teruggaan houden de juiste taal vast.",
+                descriptionEn: "The website follows your account language when signed in. Switching languages, reloading and going back retain the correct language.",
+            },
+        ],
+    },
+    {
+        id: "2026-10-20-product-explanation",
+        version: "1.0.3",
+        publishedAt: "2026-10-20T00:00:00+02:00",
+        title: "Duidelijker kennismaken met GlobeTrotr",
+        titleEn: "Get to know GlobeTrotr more easily",
+        summary: "Concrete voorbeelden laten zien hoe je een route plant, samenwerkt en reiskosten verdeelt.",
+        summaryEn: "Practical examples explain how to plan a route, collaborate and split travel expenses.",
+        changes: [
+            {
+                kind: "improved",
+                title: "Productuitleg met praktische voorbeelden",
+                titleEn: "Product explanations with practical examples",
+                description: "De reizigers-, groeps- en mogelijkhedenpagina's leggen routeplanning, samenwerking en kostenverdeling uit met voorbeelden en links naar de demo en prijzen.",
+                descriptionEn: "The traveller, group and features pages explain route planning, collaboration and expense splitting with examples and links to the demo and pricing.",
+            },
+            {
+                kind: "improved",
+                title: "Meer uitleg over de reisplanner",
+                titleEn: "More about the travel planner",
+                description: "De Over-pagina vertelt voor wie GlobeTrotr is, naast het bestaande verhaal van de oprichter. Gedeelde websitelinks krijgen een vast merkbeeld.",
+                descriptionEn: "The About page explains who GlobeTrotr is for alongside the existing founder story. Shared website links have a consistent brand image.",
+            },
+        ],
+    },
+    {
+        id: "2026-10-19-travel-polish",
+        version: "1.0.2",
+        publishedAt: "2026-10-19T00:00:00+02:00",
+        title: "Fijner plannen, in jouw taal",
+        titleEn: "Smoother planning, in your language",
+        summary: "Je taalkeuze gaat mee naar het portaal. Reizen zijn duidelijker en prettiger te bedienen, ook op mobiel.",
+        summaryEn: "Your language choice follows you into the portal. Trips are clearer and easier to use, including on mobile.",
+        changes: [
+            {
+                kind: "fixed",
+                title: "Dezelfde taal op website en portaal",
+                titleEn: "The same language across website and portal",
+                description: "Je gekozen Nederlands of Engels blijft behouden wanneer je tussen website en portaal wisselt.",
+                descriptionEn: "Your Dutch or English selection stays with you when switching between the website and portal.",
+            },
+            {
+                kind: "improved",
+                title: "Verzorgde reisoverzichten",
+                titleEn: "Polished trip overviews",
+                description: "Leesbare datums, duidelijke uitleg bij een leeg overzicht en ruimere bediening maken plannen makkelijker.",
+                descriptionEn: "Readable dates, helpful empty overviews and more comfortable controls make planning easier.",
+            },
+            {
+                kind: "improved",
+                title: "Een frisse afwerking",
+                titleEn: "A fresh finish",
+                description: "Vernieuwde merkiconen en subtiele kleuraccenten geven GlobeTrotr een consistente uitstraling.",
+                descriptionEn: "Updated brand icons and subtle colour accents give GlobeTrotr a consistent appearance.",
+            },
+        ],
+    },
+    {
+        id: "2026-10-13-team-and-mail",
+        version: "1.0.1",
+        publishedAt: "2026-10-18T00:00:00+02:00",
+        title: "Een rustigere reisplanner en teamwerkplek",
+        titleEn: "A calmer travel planner and team workspace",
+        summary: "Je reizen staan hoger in het overzicht en jaarcijfers klap je open wanneer je ze nodig hebt. Medewerkers, mailboxen en financiële lijsten zijn overzichtelijker ingedeeld. Privacyverzoeken openen het bestaande formulier. Advertentieblokken en de bijbehorende keuzevensters zijn verwijderd.",
+        summaryEn: "Your trips appear higher in the overview, with yearly statistics available when you expand them. Staff, mailboxes and financial lists have clearer layouts. Privacy requests open the existing form. Advertising blocks and their choice windows have been removed.",
+        changes: [
+            {
+                kind: "improved",
+                title: "Rustigere pagina’s zonder advertentieblokken",
+                titleEn: "Calmer pages without advertising blocks",
+                description: "De advertentie-integratie en de bijbehorende privacyteksten en keuzevensters zijn verwijderd. Taalvoorkeuren en optionele gebruiksstatistieken beheer je nog steeds via Privacykeuzes.",
+                descriptionEn: "The advertising integration and its privacy text and choice windows have been removed. Language preferences and optional usage statistics remain available through Privacy choices.",
+            },
+            {
+                kind: "improved",
+                title: "Sneller bij je reizen",
+                titleEn: "Get to your trips sooner",
+                description: "De kop, je volgende reis en het jaaroverzicht staan samen in één compacte kaart. Jaarcijfers en delen blijven beschikbaar achter een uitklapregel. Ook de mobiele filters nemen minder ruimte in.",
+                descriptionEn: "The heading, next trip and yearly overview share one compact card. Yearly statistics and sharing remain available in an expandable section. Mobile filters also take up less space.",
+            },
+            {
+                kind: "improved",
+                title: "Rustiger bedrijfsbeheer",
+                titleEn: "Calmer company administration",
+                description: "Bestaande medewerkers staan bovenaan; toevoegen opent een apart venster met duidelijke groepen en rechten. Mailboxpanelen zijn uitgelijnd en facturen en transacties kun je apart uitklappen.",
+                descriptionEn: "Existing staff appear first, while adding someone opens a separate window with clearly grouped fields and permissions. Mailbox panels are aligned, and invoices and transactions expand separately.",
+            },
+            {
+                kind: "fixed",
+                title: "Privacyacties met duidelijke vervolgstappen",
+                titleEn: "Privacy actions with clear next steps",
+                description: "Verzoek indienen opent het privacyformulier bij je account. Zonder account opent het contactformulier met Privacy geselecteerd.",
+                descriptionEn: "Submitting a request opens the privacy form in your account. Without an account, the contact form opens with Privacy selected.",
+            },
+            {
+                kind: "fixed",
+                title: "Mailboxtoegang blijft correct",
+                titleEn: "Mailbox access stays correct",
+                description: "Een inactief postvak verschijnt niet meer via een oud lidmaatschap. De eigenaar behoudt beheerrechten als daarnaast een beperkter lidmaatschap bestaat.",
+                descriptionEn: "An inactive mailbox no longer appears through an old membership. Owners retain management access when a more restricted membership also exists.",
+            },
+            {
+                kind: "improved",
+                title: "Privacykeuzes bereikbaar op mobiel",
+                titleEn: "Privacy choices remain accessible on mobile",
+                description: "De knoppen voor alleen noodzakelijke opslag en het bewaren van je keuze blijven zichtbaar terwijl je de uitleg doorleest.",
+                descriptionEn: "The necessary-only and save-choice buttons remain visible while you scroll through the explanation.",
+            },
+            {
+                kind: "improved",
+                title: "Overzichtelijk mailboxbeheer",
+                titleEn: "Clearer mailbox management",
+                description: "Mailboxgegevens, verbindingsstatus en toegang staan overzichtelijk bij elkaar. Je ziet direct wie eigenaar is en welke toegang anderen hebben.",
+                descriptionEn: "Mailbox details, connection status and access are grouped clearly. See who owns a mailbox and which access other team members have.",
+            },
+            {
+                kind: "new",
+                title: "Leesstatus en ongewenste mail",
+                titleEn: "Read status and junk mail",
+                description: "Ongelezen gesprekken hebben een stip en vet onderwerp. Openen markeert ze als gelezen; je kunt ze ook weer ongelezen maken. Ongewenste berichten staan in een aparte map.",
+                descriptionEn: "Unread conversations have a dot and a bold subject. Opening them marks them as read, and you can mark them unread again. Junk messages appear in a separate folder.",
+            },
+            {
+                kind: "fixed",
+                title: "Mailmeldingen sluiten bij afhandelen",
+                titleEn: "Email notifications close when handled",
+                description: "De melding voor inkomende bedrijfsmail verdwijnt bij openen, archiveren of verwijderen. Bij gedeelde postvakken volgt dit de gezamenlijke leesstatus.",
+                descriptionEn: "Incoming company email notifications disappear when a message is opened, archived or deleted. Shared mailboxes use the shared read status.",
+            },
+            {
+                kind: "improved",
+                title: "Minder wachten bij teruggaan naar reizen",
+                titleEn: "Less waiting when returning to trips",
+                description: "Je reizen worden niet onnodig opnieuw geladen wanneer dezelfde sessie wordt vernieuwd. Onafhankelijke inlogcontroles worden tegelijk uitgevoerd.",
+                descriptionEn: "Trips are no longer unnecessarily reloaded when the same session refreshes. Independent sign-in checks run in parallel.",
+            },
+            {
+                kind: "secure",
+                title: "Teamlogin en centraal uitloggen",
+                titleEn: "Team sign-in and central sign-out",
+                description: "Teamleden gebruiken hun eigen centrale teamidentiteit. Uitloggen uit GlobeTrotr sluit ook de centrale teamsessie; bestaande reizen en persoonlijke accountgegevens blijven behouden.",
+                descriptionEn: "Team members use their own central team identity. Signing out of GlobeTrotr also ends the central team session while existing trips and personal account details are preserved.",
+            },
+            {
+                kind: "improved",
+                title: "Privacy in acht overzichtelijke onderwerpen",
+                titleEn: "Privacy in eight clear topics",
+                description: "Lees de kern en open alleen de uitleg die je nodig hebt. Gegevensgebruik, cookies, bewaartermijnen en je rechten staan bij elkaar, in het Nederlands en Engels.",
+                descriptionEn: "Read the essentials and expand only the explanation you need. Data use, cookies, retention periods and your rights are grouped together in Dutch and English.",
+            },
+            {
+                kind: "new",
+                title: "Privacykeuzes bij je account",
+                titleEn: "Privacy choices with your account",
+                description: "De website en portal delen je keuzes. Als je bent ingelogd, worden ze ook bij je account opgeslagen zodat je ze op een ander apparaat kunt gebruiken. Analytics blijft optioneel.",
+                descriptionEn: "The website and portal share your choices. When signed in, your choices are also saved with your account so you can use them on another device. Analytics remains optional.",
+            },
+            {
+                kind: "fixed",
+                title: "Automatische mails in de gekozen taal",
+                titleEn: "Automated emails in your selected language",
+                description: "Regionale taalinstellingen worden herkend als Nederlands of Engels. Zo krijgen onder andere uitnodigingen en notificaties de juiste tekst, knoppen en voettekst. Zelfgeschreven berichten worden niet vertaald.",
+                descriptionEn: "Regional language settings are recognised as Dutch or English. Invitations and notifications receive the matching text, buttons and footer. Manually written messages are not translated.",
+            },
+        ],
+    },
+    {
+        id: "2026-10-08-1-0-0",
+        version: "1.0.0",
+        publishedAt: "2026-10-08T00:00:00+02:00",
+        title: "GlobeTrotr 1.0: van reisidee tot onderweg",
+        titleEn: "GlobeTrotr 1.0: from travel idea to life on the road",
+        summary: "De eerste volledige release brengt routes, verblijf, vervoer, reisgenoten, kosten en herinneringen samen. Plan je reis, vergelijk mogelijkheden en neem je informatie mee op pad, met een eigen omgeving voor reisorganisaties.",
+        summaryEn: "The first full release brings routes, accommodation, transport, travel companions, costs and memories together. Plan your trip, compare options and take your information with you, with a dedicated workspace for travel organisations.",
+        changes: [
+            {
+                kind: "improved",
+                title: "Jouw kaart en dagoverzicht",
+                titleEn: "Your map and daily overview",
+                description: "Koppel hotels en activiteiten zelf aan een routeplaats of kies een eigen kaartpunt. Filter route, hotels en activiteiten apart. De dagplanning toont ook lege dagen, overnachtingen en ontbrekende gegevens, met aankomst van nachtvluchten op de juiste dag.",
+                descriptionEn: "Link hotels and activities to a route place or choose a separate map marker. Filter route, hotels and activities independently. Daily planning includes empty days, overnight stays and missing details, with overnight flight arrivals on the right day.",
+            },
+            {
+                kind: "improved",
+                title: "Eén kaartpunt voor dezelfde locatie",
+                titleEn: "One map marker for the same location",
+                description: "Bekijk activiteiten, verblijven en kosten op dezelfde locatie samen in één kaartmarkering. Kies bij een activiteit een locatie en of je deze op de kaart wilt tonen. Je boekingen en herhaalde routebezoeken blijven behouden.",
+                descriptionEn: "View activities, stays and expenses within the same known town together in one map marker. Route stops follow calendar order and popup bookings follow date and start time. Choose an activity's location and whether to show it on the map. Your bookings and repeat route visits are retained.",
+            },
+            {
+                kind: "fixed",
+                title: "Je reisnachten en cijfers duidelijk in beeld",
+                titleEn: "Clear trip nights and insights",
+                description: "Bekijk reisdagen, overnachtingen en routepunten boven het reisoverzicht. Geboekte en nog ontbrekende nachten worden apart getoond, ook wanneer verblijven alleen als boeking zijn ingevoerd. Open alle statistieken vanuit dit overzicht.",
+                descriptionEn: "See trip days, nights and route stops above the trip overview. Booked and still-missing nights are shown separately, including stays entered only as bookings. Open all insights directly from this summary.",
+            },
+            {
+                kind: "improved",
+                title: "Verblijfsduur kiezen en boekingen op datum",
+                titleEn: "Choose stay length and view bookings by date",
+                description: "Kies bij ontbrekende overnachtingen het aantal nachten voordat je de hotelzoeker opent. De uitcheckdatum past mee aan. Beheer alle boekingen in één lijst op datum en begintijd, zonder categorieblokken.",
+                descriptionEn: "Choose the number of missing nights before opening hotel search. The check-out date updates accordingly. Manage all bookings in one list ordered by date and start time, without category sections.",
+            },
+            {
+                kind: "improved",
+                title: "Routes die aansluiten op jouw vervoer",
+                titleEn: "Routes that fit your transport",
+                description: "Kies vervoer per etappe en bereken auto-, fiets- en wandeltrajecten over echte wegen. Bekijk afstand, reistijd en een routevoorstel voordat je wijzigingen toepast. Geboekte heen- en terugreizen staan in het routeoverzicht, met afzonderlijke trajecten naar en vanaf de luchthaven. Vluchten verbinden vertrek en aankomst; er wordt geen automatische autorit terug naar het beginpunt toegevoegd.",
+                descriptionEn: "Choose transport for each stage and calculate driving, cycling and walking routes on real roads. Review distance, travel time and a route proposal before applying changes. Booked outbound and return journeys appear in the route overview, with separate stages to and from the airport. Flights connect departure and arrival; no automatic drive back to the starting point is added.",
+            },
+            {
+                kind: "improved",
+                title: "Verblijf en huurauto in de bestaande zoekers",
+                titleEn: "Accommodation and car rental in the existing search tools",
+                description: "Zoek hotels en huurauto’s met je reislocaties, datums en voorkeuren. Voeg resultaten toe aan de Vergelijker en open de boekingslink wanneer je wilt boeken. CJ-partnerlinks zijn geïntegreerd bij de resultaten; de losse Booking.com-widget en extra knop zijn verwijderd.",
+                descriptionEn: "Search for hotels and rental cars using your trip locations, dates and preferences. Add results to Comparison and open the booking link when you want to book. CJ affiliate links are integrated with results; the separate Booking.com widget and extra button have been removed.",
+            },
+            {
+                kind: "fixed",
+                title: "Huurautoaanvragen met de juiste zoekgegevens",
+                titleEn: "Car rental requests with the correct search details",
+                description: "De huurautozoeker verstuurt de datums, tijden en coördinaten in het formaat van de aanbieder. Ongeldige zoekgegevens, ontbrekende configuratie en een bereikte zoeklimiet krijgen een gerichte melding.",
+                descriptionEn: "The rental car search sends dates, times and coordinates in the provider’s format. Invalid search details, missing configuration and an exhausted search quota receive specific messages.",
+            },
+            {
+                kind: "improved",
+                title: "Samen reizen met een rustiger deelnemersoverzicht",
+                titleEn: "Travel together with a cleaner participant overview",
+                description: "Nodig reisgenoten afzonderlijk of samen uit en beheer hun toegang per persoon. De overbodige balk ‘Rol toepassen’ en bijbehorende selectievakjes zijn verwijderd; vergelijken, stemmen en samen plannen blijven onderdeel van de reis.",
+                descriptionEn: "Invite travel companions individually or together and manage access for each person. The redundant ‘Apply role’ bar and its checkboxes have been removed; comparison, voting and shared planning remain part of the trip.",
+            },
+            {
+                kind: "fixed",
+                title: "Kalender en verblijfcontrole beter bereikbaar",
+                titleEn: "Easier access to calendars and accommodation checks",
+                description: "Abonneer je agenda op je reisplanning en beheer de koppeling bij de juiste reis. Op mobiel opent een melding over ontbrekende hotelnachten rechtstreeks de verblijfcontrole.",
+                descriptionEn: "Subscribe your calendar to your travel schedule and manage the connection for the relevant trip. On mobile, a notice about missing hotel nights opens the accommodation check directly.",
+            },
+            {
+                kind: "improved",
+                title: "Reisinformatie mee voor onderweg",
+                titleEn: "Travel information to take on the road",
+                description: "Bewaar je offline reispakket met planning, beschikbare documenten en reisgegevens. Updates, synchronisatie en opslagproblemen zijn zichtbaar, terwijl persoonlijke paklijsten en vertrekcontroles helpen bij de voorbereiding.",
+                descriptionEn: "Save your offline trip pack with your schedule, available documents and travel information. Updates, synchronisation and storage issues are visible, while personal packing lists and departure checks help you prepare.",
+            },
+            {
+                kind: "improved",
+                title: "Vluchten en meldingen voor jouw reisdatum",
+                titleEn: "Flights and notifications for your travel date",
+                description: "Controleer vluchten voor de gekozen datum en bekijk wijzigingen voordat je ze overneemt. Pro houdt vluchtinformatie bij met statusmeldingen rond vertrek; e-mail-, push- en accountmeldingen volgen je voorkeuren.",
+                descriptionEn: "Check flights for the selected date and review changes before accepting them. Pro keeps flight information up to date with status notifications around departure; email, push and account notifications follow your preferences.",
+            },
+            {
+                kind: "new",
+                title: "Zakelijke postvakken vanuit Corporate Admin",
+                titleEn: "Business mailboxes from Corporate Admin",
+                description: "Beheer gedeelde en persoonlijke postvakken vanuit de bedrijfsomgeving. Postvakken op de GlobeTrotr-mailserver worden vanuit Corporate Admin aangemaakt en gekoppeld, met afzonderlijke status voor aanmaak en synchronisatie.",
+                descriptionEn: "Manage shared and personal mailboxes from the corporate workspace. Mailboxes hosted on the GlobeTrotr mail server are created and connected from Corporate Admin, with separate provisioning and synchronisation status.",
+            },
+            {
+                kind: "improved",
+                title: "Agency-facturen en bedrijfsgegevens op één plek",
+                titleEn: "Agency invoices and company details in one place",
+                description: "Beheer juridische bedrijfsgegevens, klantfacturen en creditcorrecties in de Agency-omgeving. Facturen gebruiken vaste gegevens, unieke nummering en nauwkeurige bedragen en zijn beschikbaar voor afdruk en export.",
+                descriptionEn: "Manage legal company details, client invoices and credit corrections in the Agency workspace. Invoices use fixed records, unique numbering and precise amounts, with print and export options.",
+            },
+            {
+                kind: "secure",
+                title: "Delen en privacy onder jouw controle",
+                titleEn: "Sharing and privacy under your control",
+                description: "Openbare profielen en reislinks tonen wat je bewust deelt. Persoonlijke dagboekteksten van andere reisgenoten blijven buiten je accountdownload.",
+                descriptionEn: "Public profiles and trip links show what you deliberately share. Other travellers’ personal journal entries stay out of your account download.",
+            },
+        ],
+    },
+    {
+        id: "2026-09-30-beta-0-9-5",
+        version: "Beta 0.9.5",
+        publishedAt: "2026-09-30T18:00:00+02:00",
+        title: "Jouw reizen, profiel en vrienden",
+        titleEn: "Your trips, profile and friends",
+        summary: "Openbare reizigersprofielen, bezochte landen, vriendschappen en bewust gedeelde reizen, met Pro-herkenning en privacy voor Agency-accounts.",
+        summaryEn: "Public traveler profiles, visited countries, friendships and deliberately shared trips, with Pro recognition and privacy for Agency accounts.",
+        changes: [
+            {
+                kind: "new",
+                title: "Eigen reizigersprofiel",
+                titleEn: "Your traveler profile",
+                description: "Kies een unieke profielnaam, schrijf een korte biografie en toon bezochte landen met vlaggen en alleen de reizen die je bewust openbaar deelt.",
+                descriptionEn: "Choose a unique username, write a short biography and show visited countries with flags and only trips you deliberately share publicly.",
+            },
+            {
+                kind: "new",
+                title: "Vrienden onder reizigers",
+                titleEn: "Friends among travelers",
+                description: "Verstuur en beheer vriendschapsverzoeken met e-mail-, push- en accountmeldingen volgens de voorkeuren van de ontvanger.",
+                descriptionEn: "Send and manage friend requests with email, push and account notifications according to the recipient's preferences.",
+            },
+            {
+                kind: "improved",
+                title: "Delen zonder centrale etalage",
+                titleEn: "Sharing without a central directory",
+                description: "Deel een directe reislink of je profielpagina. GlobeTrotr zet openbare reizen niet meer centraal op de homepage.",
+                descriptionEn: "Share a direct trip link or your profile page. GlobeTrotr no longer lists public trips centrally on the homepage.",
+            },
+            {
+                kind: "secure",
+                title: "Profielprivacy per account",
+                titleEn: "Profile privacy per account",
+                description: "Een profiel is vrijwillig en vriendschapsverzoeken zijn apart instelbaar. Actieve Agency-accounts krijgen geen openbare reizigerspagina.",
+                descriptionEn: "Profiles are optional and friend requests have a separate setting. Active Agency accounts do not receive a public traveler page.",
+            },
+        ],
+    },
+    {
+        id: "2026-09-28-beta-0-9-3",
+        version: "Beta 0.9.3",
+        publishedAt: "2026-09-28T19:07:09+02:00",
+        title: "Persoonlijk voorbereiden en professioneel beheren",
+        titleEn: "Personal preparation and professional management",
+        summary: "Paklijsten per persoon en voor de groep, betrouwbare vluchtcontrole en een zichtbare, volwaardige Agency-omgeving.",
+        summaryEn: "Packing lists for each person and the group, reliable flight checks and a visible, complete Agency workspace.",
+        changes: [
+            {
+                kind: "fixed",
+                title: "Offline direct bereikbaar",
+                titleEn: "Offline access restored",
+                description: "De Offline-knop opent weer rechtstreeks het offline reispakket met bewaren, bijwerken, openen, synchroniseren en verwijderen.",
+                descriptionEn: "The Offline button once again opens the offline trip pack directly, with save, update, open, sync and remove controls.",
+            },
+            {
+                kind: "new",
+                title: "Gezamenlijke en persoonlijke paklijsten",
+                titleEn: "Shared and personal packing lists",
+                description: "Open één groepspaklijst voor alle reisgenoten of kies een persoon. Ieder item bevat bagagetype, categorie en aantal.",
+                descriptionEn: "Open one group packing list for all travellers or select a person. Every item includes baggage type, category and quantity.",
+            },
+            {
+                kind: "improved",
+                title: "Paklijstsjablonen op de juiste lijst",
+                titleEn: "Packing templates on the right list",
+                description: "Voeg een winter-, stads-, strand-, roadtrip- of zakensjabloon toe aan de gekozen groeps- of persoonlijke lijst, zonder bestaande items te verdubbelen.",
+                descriptionEn: "Add a winter, city, beach, road trip or business template to the selected group or personal list without duplicating existing items.",
+            },
+            {
+                kind: "improved",
+                title: "Paklijst per tas gegroepeerd",
+                titleEn: "Packing list grouped by bag",
+                description: "Iedere gekozen paklijst toont totale voortgang en groepeert items onder handbagage, cabinebagage, ruimbagage en gezamenlijke bagage.",
+                descriptionEn: "Every selected packing list shows overall progress and groups items under personal item, cabin baggage, checked baggage and shared baggage.",
+            },
+            {
+                kind: "improved",
+                title: "Startlijsten voor vertrek en boodschappen",
+                titleEn: "Starter lists for departure and shopping",
+                description: "Vul de vertrekcontrole of reisboodschappen met één knop met praktische standaardpunten; eigen en bestaande punten blijven behouden.",
+                descriptionEn: "Fill the departure check or travel shopping list with practical standard items in one click while keeping custom and existing items.",
+            },
+            {
+                kind: "improved",
+                title: "Datumgebonden vluchtcontrole",
+                titleEn: "Date-specific flight checks",
+                description: "AeroDataBox zoekt voor de gekozen reisdatum en toont handmatige wijzigingen eerst als voorstel. Pro synchroniseert status, tijden, gate, terminal, incheckbalie en bagageband en gebruikt vlak voor vertrek live alerts met polling als vangnet.",
+                descriptionEn: "AeroDataBox searches for the selected travel date and shows manual changes as a proposal first. Pro synchronises status, times, gate, terminal, check-in desk and baggage belt, using live alerts close to departure with polling as a fallback.",
+            },
+            {
+                kind: "improved",
+                title: "Routeplanning over echte wegen",
+                titleEn: "Routing on real roads",
+                description: "OpenRouteService berekent auto-, fiets- en wandelroutes met maximaal 200 punten. Tolwegen, veerboten, reistijd en rustmomenten zijn vooraf controleerbaar; toepassen gebeurt altijd bewust.",
+                descriptionEn: "OpenRouteService calculates driving, cycling and walking routes with up to 200 points. Toll roads, ferries, travel time and breaks can be reviewed in advance; applying a proposal is always deliberate.",
+            },
+            {
+                kind: "improved",
+                title: "Volwaardige Agency-omgeving",
+                titleEn: "Complete Agency workspace",
+                description: "Agency blijft zichtbaar met klantbeheer, teamrechten, onboarding, eigen branding, subdomeinen, geverifieerde domeinen en eigen SMTP.",
+                descriptionEn: "Agency remains visible with client management, team permissions, onboarding, custom branding, subdomains, verified domains and custom SMTP.",
+            },
+        ],
+    },
+    {
+        id: "2026-09-26-beta-0-9-2",
+        version: "Beta 0.9.2",
+        publishedAt: "2026-09-26T11:47:36+02:00",
+        title: "Een reis om te bewaren en te delen",
+        titleEn: "A journey to keep and share",
+        summary: "Het reisdagboek groeide uit tot een eigen ervaring met offline herinneringen, media, samenvattingen en een bewust gedeeld live reisverhaal.",
+        summaryEn: "The travel journal became a dedicated experience with offline memories, media, summaries and a deliberately shared live travel story.",
+        changes: [
+            {
+                kind: "new",
+                title: "Uitgebreid reisdagboek",
+                titleEn: "Extended travel journal",
+                description: "Herbeleef je reis via een tijdlijn, galerij en kaart, bewaar gekozen inhoud offline en maak bewust een samenvatting of eigen PDF.",
+                descriptionEn: "Relive your trip through a timeline, gallery and map, keep selected content offline and deliberately create a summary or personal PDF.",
+            },
+            {
+                kind: "new",
+                title: "Live reisverhaal",
+                titleEn: "Live travel story",
+                description: "Deel bewust openbare herinneringen, foto's en afgeschermde video's met bevestigde volgers; bezoekers kunnen liken en begrensd reageren zonder account.",
+                descriptionEn: "Share deliberately public memories, photos and protected videos with confirmed followers; visitors can like and leave moderated comments without an account.",
+            },
+            {
+                kind: "improved",
+                title: "Dagboek als eigen bestemming",
+                titleEn: "Journal as a dedicated destination",
+                description: "Het dagboek heeft een eigen portaalpagina en opent vanuit iedere reis direct op de juiste herinneringen.",
+                descriptionEn: "The journal has its own portal page and opens directly on the correct memories from every trip.",
+            },
+        ],
+    },
+    {
+        id: "2026-09-25-beta-0-9-1",
+        version: "Beta 0.9.1",
+        publishedAt: "2026-09-25T17:10:00+02:00",
+        title: "Slimmer plannen en duidelijker voorbereiden",
+        titleEn: "Smarter planning and clearer preparation",
+        summary: "Een brede beta-update voor route-import, samenwerken, offline gebruik, verblijfcontrole en een controleerbaar routevoorstel.",
+        summaryEn: "A broad beta update for route imports, collaboration, offline use, accommodation checks and a reviewable route proposal.",
+        changes: [
+            {
+                kind: "new",
+                title: "Favoriete plaatsen",
+                titleEn: "Favourite places",
+                description: "Bewaar persoonlijke plaatsen en voeg ze later snel aan een andere reis toe.",
+                descriptionEn: "Save personal places and quickly add them to another trip later.",
+            },
+            {
+                kind: "new",
+                title: "Gedeelde reislijsten",
+                titleEn: "Shared trip lists",
+                description: "Taken zijn te ordenen als vertrekcheck, boodschappenlijst of een eigen lijst, met verantwoordelijke en deadline.",
+                descriptionEn: "Tasks can be organised as departure, shopping or custom lists, with an assignee and deadline.",
+            },
+            {
+                kind: "new",
+                title: "Groepen uitnodigen",
+                titleEn: "Group invitations",
+                description: "Nodig meerdere reizigers tegelijk uit, bekijk vooraf hun toegang en wijzig bestaande rollen in bulk.",
+                descriptionEn: "Invite multiple travellers at once, preview their access and update existing roles in bulk.",
+            },
+            {
+                kind: "improved",
+                title: "Veilige reisvariant",
+                titleEn: "Safe trip variant",
+                description: "Bekijk vooraf wat wordt gekopieerd; toegang, documenten, betalingen en reserveringscodes blijven achter.",
+                descriptionEn: "Preview what will be copied; access, documents, payments and reservation codes stay behind.",
+            },
+            {
+                kind: "new",
+                title: "Plaatsen langs de route",
+                titleEn: "Places along the route",
+                description: "Zoek rond een routeplaats naar horeca, activiteiten, bezienswaardigheden en praktische voorzieningen en voeg ze pas na controle toe.",
+                descriptionEn: "Find food, activities, sights and practical services near a route stop and add them only after reviewing the result.",
+            },
+            {
+                kind: "improved",
+                title: "Eerlijke hotelvergelijking",
+                titleEn: "Fair hotel comparison",
+                description: "Vergelijk verblijfskandidaten met dezelfde bestemming, data, gasten en kamers, inclusief prijs, belastingen en voorwaarden.",
+                descriptionEn: "Compare accommodation candidates using the same destination, dates, guests and rooms, including price, taxes and terms.",
+            },
+            {
+                kind: "new",
+                title: "Routevoorstel met controle",
+                titleEn: "Route proposal with review",
+                description: "Vergelijk de huidige stopvolgorde met een korter voorstel en een indicatie van afstand en reistijd. De route verandert pas na je bevestiging.",
+                descriptionEn: "Compare the current stop order with a shorter proposal and estimated distance and travel time. The route only changes after your confirmation.",
+            },
+            {
+                kind: "improved",
+                title: "Ontbrekende verblijven per periode",
+                titleEn: "Missing stays grouped by period",
+                description: "Opeenvolgende ontbrekende nachten op dezelfde plaats worden als één duidelijke verblijfsperiode getoond.",
+                descriptionEn: "Consecutive missing nights in the same place are shown as one clear accommodation period.",
+            },
+            {
+                kind: "improved",
+                title: "GPX-route vooraf controleren",
+                titleEn: "Review a GPX route before import",
+                description: "Een lokaal routevoorbeeld toont volgorde, selectie en bestaande punten voordat bestemmingen worden toegevoegd.",
+                descriptionEn: "A local route preview shows order, selection and existing points before destinations are added.",
+            },
+            {
+                kind: "improved",
+                title: "Offline uitgaven beheren",
+                titleEn: "Manage offline expenses",
+                description: "Kies uitgaven afzonderlijk voor synchronisatie, verwijder een lokale regel en herken conflicten voordat servergegevens worden geraakt.",
+                descriptionEn: "Select expenses individually for synchronisation, remove a local entry and identify conflicts before server data is affected.",
+            },
+        ],
+    },
+    {
+        id: "2026-09-23-beta-0-9",
+        version: "Beta 0.9",
+        publishedAt: "2026-09-23T12:00:00+02:00",
+        title: "Samen beslissen en voorbereid op reis",
+        titleEn: "Decide together and travel prepared",
+        summary: "Een grote productupdate voor vergelijken, samenwerken, Agency-intake, meldingen en gebruik onderweg.",
+        summaryEn: "A major product update for comparison, collaboration, Agency intake, notifications and use while travelling.",
+        changes: [
+            {
+                kind: "new",
+                title: "Reisvergelijker en gezamenlijke keuzes",
+                titleEn: "Trip comparison and shared decisions",
+                description: "Vergelijk reisopties per categorie, bespreek kandidaten, stem samen en zet de definitieve keuze gecontroleerd om naar één boeking.",
+                descriptionEn: "Compare travel options by category, discuss candidates, vote together and convert the final choice into exactly one booking.",
+            },
+            {
+                kind: "new",
+                title: "Veilige klantformulieren voor Agencies",
+                titleEn: "Secure Agency client forms",
+                description: "Agencies kunnen tweetalige intakeformulieren delen, antwoorden beoordelen en goedgekeurde voorkeuren verwerken zonder gevoelige geheimvelden te verzamelen.",
+                descriptionEn: "Agencies can share bilingual intake forms, review responses and process approved preferences without requesting confidential account details.",
+            },
+            {
+                kind: "new",
+                title: "Offline dagoverzicht en uitgaven",
+                titleEn: "Offline daily view and expenses",
+                description: "Bewaar bewust een beperkt reispakket voor onderweg, bekijk dagen zonder verbinding en synchroniseer nieuwe uitgaven na herstel van internet.",
+                descriptionEn: "Explicitly save a limited trip pack for the road, view travel days without a connection and synchronise new expenses once internet access returns.",
+            },
+            {
+                kind: "new",
+                title: "Klantintake en herbruikbare Agency-content",
+                titleEn: "Client intake and reusable Agency content",
+                description: "Reisorganisaties kunnen tweetalige formulieren uitsturen, antwoorden gecontroleerd verwerken en versiebeheer gebruiken voor content in reizen en offertes.",
+                descriptionEn: "Travel organisations can send bilingual forms, process responses in a controlled way and use versioned content in trips and quotes.",
+            },
+            {
+                kind: "secure",
+                title: "Offline met minimale gegevens",
+                titleEn: "Offline with minimal data",
+                description: "De lokale reiskopie bevat alleen route, planning en praktische gegevens. Documenten, boekingscodes en bestaande bedragen blijven buiten het offline pakket en uitloggen wist de kopie.",
+                descriptionEn: "The local trip copy only contains route, itinerary and practical details. Documents, booking references and existing amounts stay outside the offline pack, and signing out clears the copy.",
+            },
+            {
+                kind: "new",
+                title: "Agency-contentbibliotheek",
+                titleEn: "Agency content library",
+                description: "Beheer herbruikbare, tweetalige reiscontent met rollen, versies en broninformatie en voeg die gecontroleerd toe aan reizen en offertes.",
+                descriptionEn: "Manage reusable bilingual travel content with roles, versions and source information, then apply it to trips and quotes in a controlled way.",
+            },
+            {
+                kind: "improved",
+                title: "Portal, mobiel en accountbeveiliging",
+                titleEn: "Portal, mobile and account security",
+                description: "Publieke website en accountportaal zijn duidelijk gescheiden, mobiele navigatie is aangescherpt en Google, Discord, passkeys en TOTP sluiten aan op dezelfde accountomgeving.",
+                descriptionEn: "The public website and account portal are clearly separated, mobile navigation is refined, and Google, Discord, passkeys and TOTP connect to the same account environment.",
+            },
+        ],
+    },
+    {
+        id: "2026-09-21-communication-reliability",
+        version: "Beta 0.8",
+        publishedAt: "2026-09-21T20:30:00+02:00",
+        title: "Betrouwbare communicatie en betalingen",
+        titleEn: "Reliable communication and payments",
+        summary: "Verbeteringen voor mailopmaak, vertaling, betalingen en agenda zijn in de beta beschikbaar. De bestaande mailbezorging blijft via ZXCS lopen.",
+        summaryEn: "Improvements to email formatting, translation, payments and calendars are available in beta. Existing email delivery continues through ZXCS.",
+        changes: [
+            {
+                kind: "improved",
+                title: "Professionele bedrijfsmail",
+                titleEn: "Professional company email",
+                description: "Bedrijfsmail gebruikt veilige HTML, een herkenbare handtekening en behoudt opmaak en bijlagen bij opnieuw bezorgen.",
+                descriptionEn: "Company email uses safe HTML, a recognisable signature and preserves formatting and attachments when retried.",
+            },
+            {
+                kind: "new",
+                title: "Vertaalconcepten met controle",
+                titleEn: "Translation drafts with review",
+                description: "Feedback, meldingen, onderhoud, recensies en bedrijfsmail kunnen tussen Nederlands en Engels als controleerbaar concept worden vertaald.",
+                descriptionEn: "Feedback, notices, maintenance, testimonials and company email can be translated between Dutch and English as reviewable drafts.",
+            },
+            {
+                kind: "fixed",
+                title: "Betaling en live agenda hersteld",
+                titleEn: "Payments and live calendars restored",
+                description: "Betaalrechten, gelokaliseerde betaalmeldingen en live agenda-abonnementen zijn na de productie-uitrol gecontroleerd.",
+                descriptionEn: "Payment entitlements, localised payment notices and live calendar subscriptions were verified after the production rollout.",
+            },
+        ],
+    },
+    {
+        id: "2026-09-21-trip-polish",
+        version: "Beta 0.7",
+        publishedAt: "2026-09-21T12:00:00+02:00",
+        title: "Reizen delen en exporteren",
+        titleEn: "Share and export trips",
+        summary: "Verbeteringen die in de actieve beta zijn bevestigd.",
+        summaryEn: "Improvements confirmed in the active beta.",
+        changes: [
+            {
+                kind: "improved",
+                title: "Overzichtelijke openbare reispagina",
+                titleEn: "Clearer public trip page",
+                description: "De gedeelde reis toont de planning leesbaarder.",
+                descriptionEn: "Shared trips present the itinerary more clearly.",
+            },
+            {
+                kind: "fixed",
+                title: "GPX en losse agenda-export",
+                titleEn: "GPX and one-time calendar export",
+                description: "GPX-download en losse ICS-export werkten vanaf deze beta; de live abonnementlink was in deze release nog in onderzoek.",
+                descriptionEn: "GPX download and one-time ICS export worked from this beta; the live subscription link was still under investigation in this release.",
+            },
+            {
+                kind: "fixed",
+                title: "Uitgaven en bedrijfsbeheer",
+                titleEn: "Expenses and corporate management",
+                description: "De tekst bij 'betaald door' past weer in de knop en bedrijfsbeheerderaccounts kunnen worden opgeslagen.",
+                descriptionEn: "The paid-by label fits its button and corporate administrator accounts can be saved.",
+            },
+        ],
+    },
+    {
+        id: "2026-09-15-payments-calendar",
+        version: "Beta 0.6",
+        publishedAt: "2026-09-15T16:00:00+02:00",
+        title: "Betalen en agenda",
+        titleEn: "Payments and calendar",
+        summary: "Paddle-checkout, facturen en agenda-export zijn samengebracht in één duidelijke productupdate.",
+        summaryEn: "Paddle checkout, invoices and calendar export are combined in one clear product update.",
+        changes: [
+            {
+                kind: "new",
+                title: "Maandelijks of één losse maand",
+                titleEn: "Monthly or one-time month",
+                description: "Pro en Agency ondersteunen een doorlopend abonnement en een losse maand zonder automatische verlenging.",
+                descriptionEn: "Pro and Agency support a recurring subscription and a one-time month without automatic renewal.",
+            },
+            {
+                kind: "new",
+                title: "Facturen en abonnement beheren",
+                titleEn: "Manage invoices and subscriptions",
+                description: "Betalingen lopen via Paddle en het klantportaal geeft toegang tot facturen, betaalmethode en opzegging.",
+                descriptionEn: "Payments use Paddle and the customer portal provides invoices, payment methods and cancellation.",
+            },
+            {
+                kind: "improved",
+                title: "Agenda exporteren",
+                titleEn: "Export your calendar",
+                description: "Een reisplanning kan als los ICS-bestand worden gebruikt; live agenda-abonnementen worden tijdens de beta verder getest.",
+                descriptionEn: "A trip schedule can be used as an ICS file; live calendar subscriptions continue to be tested during beta.",
+            },
+        ],
+    },
+    {
+        id: "2026-09-14-access-communication",
+        version: "Beta 0.5",
+        publishedAt: "2026-09-14T23:55:00+02:00",
+        title: "Toegang en communicatie",
+        titleEn: "Access and communication",
+        summary: "Accountbeveiliging, servicemail, privacyverzoeken en bedrijfsmail kregen één samenhangende basis.",
+        summaryEn: "Account security, service email, privacy requests and company email received one coherent foundation.",
+        changes: [
+            {
+                kind: "secure",
+                title: "Meer veilige inlogmethoden",
+                titleEn: "More secure sign-in methods",
+                description: "Naast e-mail ondersteunt GlobeTrotr Google, Discord, passkeys en authenticatorcodes.",
+                descriptionEn: "Alongside email, GlobeTrotr supports Google, Discord, passkeys and authenticator codes.",
+            },
+            {
+                kind: "improved",
+                title: "Communicatievoorkeuren",
+                titleEn: "Communication preferences",
+                description: "Gebruikers kiezen welke uitnodigingen, reisupdates en betaalberichten zij per e-mail ontvangen.",
+                descriptionEn: "Users choose which invitations, trip updates and payment messages they receive by email.",
+            },
+            {
+                kind: "new",
+                title: "Privacyverzoeken volgen",
+                titleEn: "Track privacy requests",
+                description: "Privacyverzoeken kunnen vanuit het account worden ingediend en gevolgd.",
+                descriptionEn: "Privacy requests can be submitted and tracked from the account.",
+            },
+            {
+                kind: "new",
+                title: "Bedrijfsmail en postvakken",
+                titleEn: "Company email and mailboxes",
+                description: "Bevoegde medewerkers kunnen gedeelde en persoonlijke postvakken met een vaste handtekening gebruiken.",
+                descriptionEn: "Authorised staff can use shared and personal mailboxes with a consistent signature.",
+            },
+        ],
+    },
+    {
+        id: "2026-09-14-travel-tools",
+        version: "Beta 0.4",
+        publishedAt: "2026-09-14T12:00:00+02:00",
+        title: "Meer gereedschap voor onderweg",
+        titleEn: "More tools for the road",
+        summary: "Reisstatistieken, taken, exports en een rustiger dagoverzicht maken lange reizen overzichtelijker.",
+        summaryEn: "Trip statistics, tasks, exports and a calmer daily view make longer trips easier to manage.",
+        changes: [
+            {
+                kind: "new",
+                title: "Reisstatistieken en budgettempo",
+                titleEn: "Trip statistics and budget pace",
+                description: "Bekijk reisdagen, landen, boekingen, uitgaven per categorie en de verwachte budgetontwikkeling.",
+                descriptionEn: "See travel days, countries, bookings, spending by category and projected budget progress.",
+            },
+            {
+                kind: "new",
+                title: "Taken en Vandaag",
+                titleEn: "Tasks and Today",
+                description: "Verdeel reistaken en bekijk onderweg alleen wat voor de huidige dag van belang is.",
+                descriptionEn: "Assign trip tasks and see only what matters for the current day while travelling.",
+            },
+            {
+                kind: "improved",
+                title: "Route en reisversies",
+                titleEn: "Route and trip versions",
+                description: "Keer een route om, maak een conceptkopie en vergelijk route, boekingen en budget.",
+                descriptionEn: "Reverse a route, create a draft copy and compare route, bookings and budget.",
+            },
+        ],
+    },
+    {
+        id: "2026-09-12-agency-operations",
+        version: "Beta 0.3",
+        publishedAt: "2026-09-12T20:00:00+02:00",
+        title: "Agency als werkruimte",
+        titleEn: "Agency as a workspace",
+        summary: "Reisorganisaties beheren klanten, offertes, teamrechten en branding vanuit één omgeving.",
+        summaryEn: "Travel organisations manage clients, quotes, team permissions and branding from one workspace.",
+        changes: [
+            {
+                kind: "new",
+                title: "Klanten en offertes",
+                titleEn: "Clients and quotes",
+                description: "Maak offertes met varianten, deel ze veilig en zet een geaccepteerd voorstel om naar een reis.",
+                descriptionEn: "Create quotes with variants, share them securely and convert an accepted proposal into a trip.",
+            },
+            {
+                kind: "secure",
+                title: "Rollen en audit",
+                titleEn: "Roles and audit",
+                description: "Teamrechten begrenzen toegang en belangrijke beheeracties worden vastgelegd.",
+                descriptionEn: "Team permissions restrict access and important administrative actions are recorded.",
+            },
+            {
+                kind: "improved",
+                title: "Eigen uitstraling",
+                titleEn: "Custom branding",
+                description: "Agency-reizen gebruiken een organisatienaam, accentkleur en gecontroleerde domeinkoppeling.",
+                descriptionEn: "Agency trips use an organisation name, accent colour and verified domain connection.",
+            },
+        ],
+    },
+    {
+        id: "2026-09-10-public-beta",
+        version: "Beta 0.2",
+        publishedAt: "2026-09-10T18:00:00+02:00",
+        title: "Publieke beta en beheer",
+        titleEn: "Public beta and administration",
+        summary: "De publieke website, feedbackstroom en Corporate Admin zijn klaargemaakt voor een beheerste beta.",
+        summaryEn: "The public website, feedback flow and Corporate Admin were prepared for a controlled beta.",
+        changes: [
+            {
+                kind: "new",
+                title: "Feedback en bekende problemen",
+                titleEn: "Feedback and known issues",
+                description: "Testers kunnen feedback indienen en beheerders volgen problemen, reacties en productstatus.",
+                descriptionEn: "Testers can submit feedback while administrators track issues, replies and product status.",
+            },
+            {
+                kind: "improved",
+                title: "Duidelijkere website",
+                titleEn: "Clearer website",
+                description: "Product, prijzen, contact, status, roadmap en juridische informatie hebben ieder een duidelijke plek.",
+                descriptionEn: "Product, pricing, contact, status, roadmap and legal information each have a clear place.",
+            },
+            {
+                kind: "secure",
+                title: "Europese infrastructuur en privacy",
+                titleEn: "European infrastructure and privacy",
+                description: "De website legt primaire opslag in Frankfurt, Duitse applicatieservers en privacykeuzes uit.",
+                descriptionEn: "The website explains primary storage in Frankfurt, German application servers and privacy choices.",
+            },
+        ],
+    },
+    {
+        id: "2026-09-07-core-planner",
+        version: "Beta 0.1",
+        publishedAt: "2026-09-07T23:34:00+02:00",
+        title: "De reisplanner staat",
+        titleEn: "The trip planner is ready",
+        summary: "De basis voor gezamenlijk plannen, boeken, uitgaven bijhouden en reizen delen is beschikbaar.",
+        summaryEn: "The foundation for planning together, tracking bookings and expenses, and sharing trips is available.",
+        changes: [
+            {
+                kind: "new",
+                title: "Planning en route",
+                titleEn: "Planning and route",
+                description: "Bestemmingen, dagplanning, boekingen en routekaart komen samen in één reis.",
+                descriptionEn: "Destinations, daily planning, bookings and the route map come together in one trip.",
+            },
+            {
+                kind: "new",
+                title: "Uitgaven en verrekening",
+                titleEn: "Expenses and settlement",
+                description: "Houd uitgaven in meerdere valuta bij en bereken wie nog aan wie betaalt.",
+                descriptionEn: "Track expenses in multiple currencies and calculate who still owes whom.",
+            },
+            {
+                kind: "secure",
+                title: "Samenwerken met rollen",
+                titleEn: "Collaborate with roles",
+                description: "Eigenaar, reiziger, kijker en financiële rollen krijgen passende toegang.",
+                descriptionEn: "Owner, traveller, viewer and finance roles receive appropriate access.",
+            },
+        ],
+    },
 ];
+/** Editorial bundles, not renamed builds. Original notes remain available in
+ * each bundle. A future release outside these ranges is never silently hidden. */
+export function groupedPublicUpdates(releases: PublicRelease[]): PublicUpdate[] {
+    const versions = (low: number, high: number) => Array.from({ length: high - low + 1 }, (_, index) => `1.0.${low + index}`);
+    const definitions = [
+        {
+            id: "travel-planning-october", versions: versions(27, 39),
+            title: "Je route, bestemmingen en boekingen", titleEn: "Your route, destinations and bookings",
+            summary: "De verbeteringen aan bestemmingen, kaartvolgorde, vervoer en boekingen samen in één overzicht.",
+            summaryEn: "Destination, map order, transport and booking improvements together in one overview.",
+            highlights: [["1.0.39", 0], ["1.0.39", 1], ["1.0.39", 2], ["1.0.38", 1]] as const,
+        },
+        {
+            id: "reliability-privacy-october", versions: versions(12, 26),
+            title: "Betrouwbaarheid, privacy en samen reizen", titleEn: "Reliability, privacy and travelling together",
+            summary: "Verbeteringen aan statusinformatie, accountbeheer, privacykeuzes en samenwerken zijn gebundeld.",
+            summaryEn: "Status information, account management, privacy choices and collaboration improvements are grouped together.",
+            highlights: [["1.0.26", 0], ["1.0.23", 0], ["1.0.21", 1], ["1.0.12", 1]] as const,
+        },
+        {
+            id: "website-trip-tools-october", versions: versions(2, 11),
+            title: "Fijner plannen en duidelijker kennismaken", titleEn: "Easier planning and a clearer introduction",
+            summary: "Reisoverzichten, taalkeuze, de website en Agency-instellingen zijn op meerdere punten verbeterd.",
+            summaryEn: "Trip overviews, language choices, the website and Agency settings have been improved.",
+            highlights: [["1.0.11", 0], ["1.0.8", 0], ["1.0.4", 0], ["1.0.2", 1]] as const,
+        },
+        {
+            id: "version-one", versions: versions(0, 1),
+            title: "GlobeTrotr 1.0", titleEn: "GlobeTrotr 1.0",
+            summary: "De eerste 1.0-versie en de daaropvolgende afwerking van de reisplanner en teamwerkplek.",
+            summaryEn: "The first 1.0 version and the subsequent refinements to the trip planner and team workspace.",
+            highlights: [["1.0.0", 0], ["1.0.0", 4], ["1.0.1", 1], ["1.0.1", 3]] as const,
+        },
+        {
+            id: "beta-expansion", versions: ["Beta 0.8", "Beta 0.9", "Beta 0.9.1", "Beta 0.9.2", "Beta 0.9.3", "Beta 0.9.5"],
+            title: "De bèta groeit mee met je reizen", titleEn: "The beta grows with your travels",
+            summary: "Reizigersprofielen, delen en de verdere uitbreiding van de bèta, met de oorspronkelijke toelichtingen erbij.",
+            summaryEn: "Traveller profiles, sharing and the beta’s further expansion, with the original explanations retained.",
+            highlights: [["Beta 0.9.5", 0], ["Beta 0.9.3", 0], ["Beta 0.9.1", 0], ["Beta 0.8", 0]] as const,
+        },
+        {
+            id: "beta-foundations", versions: ["Beta 0.1", "Beta 0.2", "Beta 0.3", "Beta 0.4", "Beta 0.5", "Beta 0.6", "Beta 0.7"],
+            title: "De eerste stappen van GlobeTrotr", titleEn: "GlobeTrotr’s first steps",
+            summary: "De eerste bèta-updates over reizen plannen, samenwerken en de opbouw van GlobeTrotr bij elkaar.",
+            summaryEn: "The first beta updates on planning trips, collaboration and building GlobeTrotr, collected together.",
+            highlights: [["Beta 0.7", 0], ["Beta 0.5", 0], ["Beta 0.3", 0], ["Beta 0.1", 0]] as const,
+        },
+    ];
+    const assigned = new Set<string>();
+    const updates: PublicUpdate[] = definitions.flatMap(definition => {
+        const members = releases.filter(release => definition.versions.includes(release.version));
+        if (!members.length)
+            return [];
+        members.forEach(release => assigned.add(release.id));
+        const changes = definition.highlights.flatMap(([version, index]) => {
+            const change = members.find(release => release.version === version)?.changes[index];
+            return change ? [change] : [];
+        });
+        return [{ id: definition.id, title: definition.title, titleEn: definition.titleEn,
+                summary: definition.summary, summaryEn: definition.summaryEn, releases: members,
+                changes: changes.length ? changes : members[0].changes.slice(0, 4) }];
+    });
+    for (const release of releases) {
+        if (!assigned.has(release.id))
+            updates.push({ ...release, releases: [release] });
+    }
+    return updates.sort((a, b) => Date.parse(b.releases[0].publishedAt) - Date.parse(a.releases[0].publishedAt));
+}
+export const PUBLIC_UPDATES = groupedPublicUpdates(PUBLIC_RELEASES);

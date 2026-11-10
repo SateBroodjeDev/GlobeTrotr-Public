@@ -58,7 +58,7 @@ function UserDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [notifyDeletion, setNotifyDeletion] = useState(true);
   const [deletionReason, setDeletionReason] = useState("");
-  const [account, setAccount] = useState({ displayName: "", email: "", phone: "", locale: "nl-NL" as "nl-NL"|"en-GB",plan:"free" as "free"|"pro"|"agency",publicSlug:"",biography:"",publicProfileEnabled:false,friendRequestsEnabled:true,visitedCountries:[] as string[] });
+  const [account, setAccount] = useState({ displayName: "", email: "", phone: "", locale: "nl-NL" as "nl-NL"|"en-GB",plan:"free" as "free"|"pro"|"agency",planMode:"automatic" as "manual"|"automatic",publicSlug:"",biography:"",publicProfileEnabled:false,friendRequestsEnabled:true,visitedCountries:[] as string[] });
   const query = useQuery({
     queryKey: ["platform-user-detail", userId],
     queryFn: () => getPlatformUserDetail({ data: { userId } }),
@@ -66,12 +66,12 @@ function UserDetailPage() {
   const detail = query.data;
   useEffect(() => {
     if (!detail) return;
-    setAccount({ displayName: detail.user.displayName, email: detail.user.email, phone: detail.user.phone ?? "", locale: detail.user.locale === "en-GB" ? "en-GB" : "nl-NL",plan:detail.workspace?.plan === "pro" || detail.workspace?.plan === "agency" ? detail.workspace.plan : "free",publicSlug:detail.user.publicSlug??"",biography:detail.user.biography??"",publicProfileEnabled:Boolean(detail.user.publicProfileEnabled),friendRequestsEnabled:detail.user.friendRequestsEnabled!==false,visitedCountries:detail.user.visitedCountries??[] });
+    setAccount({ displayName: detail.user.displayName, email: detail.user.email, phone: detail.user.phone ?? "", locale: detail.user.locale === "en-GB" ? "en-GB" : "nl-NL",planMode:detail.workspace?.manualPlan ? "manual" : "automatic",plan:detail.workspace?.plan === "pro" || detail.workspace?.plan === "agency" ? detail.workspace.plan : "free",publicSlug:detail.user.publicSlug??"",biography:detail.user.biography??"",publicProfileEnabled:Boolean(detail.user.publicProfileEnabled),friendRequestsEnabled:detail.user.friendRequestsEnabled!==false,visitedCountries:detail.user.visitedCountries??[] });
   }, [detail]);
 
   async function saveAccount() {
     try {
-      await updatePlatformUserAccount({ data: { userId, ...account, publicProfileEnabled: detail?.user.agencyAccount ? false : account.publicProfileEnabled, reason } });
+      await updatePlatformUserAccount({ data: { userId, ...account, planChange: account.planMode !== (detail?.workspace?.manualPlan ? "manual" : "automatic") || account.planMode === "manual" && account.plan !== detail?.workspace?.plan, publicProfileEnabled: detail?.user.agencyAccount ? false : account.publicProfileEnabled, reason } });
       setReason(""); await query.refetch();
       toast.success(text("Accountgegevens bijgewerkt.", "Account details updated."));
     } catch { toast.error(text("Accountgegevens konden niet worden bijgewerkt.", "Account details could not be updated.")); }
@@ -331,7 +331,9 @@ function UserDetailPage() {
             <label className="space-y-1 text-sm">E-mail<Input type="email" value={account.email} onChange={e=>setAccount({...account,email:e.target.value})}/></label>
             <label className="space-y-1 text-sm">{text("Telefoonnummer", "Phone number")}<Input value={account.phone} onChange={e=>setAccount({...account,phone:e.target.value})}/></label>
             <label className="space-y-1 text-sm">{text("Voorkeurstaal", "Preferred language")}<select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={account.locale} onChange={e=>setAccount({...account,locale:e.target.value as "nl-NL"|"en-GB"})}><option value="nl-NL">Nederlands</option><option value="en-GB">English</option></select></label>
-            <label className="space-y-1 text-sm">{text("Abonnement", "Plan")}<select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={account.plan} onChange={e=>setAccount({...account,plan:e.target.value as "free"|"pro"|"agency"})}><option value="free">Free</option><option value="pro">Pro</option><option value="agency">Agency</option></select></label>
+            <label className="space-y-1 text-sm">{text("Abonnementsbeheer", "Plan management")}<select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={account.planMode} onChange={e=>setAccount({...account,planMode:e.target.value as "manual"|"automatic"})}><option value="automatic">{text("Automatisch via betalingen", "Automatic from payments")}</option><option value="manual">{text("Handmatig ingesteld", "Manually assigned")}</option></select></label>
+            <label className="space-y-1 text-sm">{text("Abonnement", "Plan")}<select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={account.plan} disabled={account.planMode!=="manual"} onChange={e=>setAccount({...account,plan:e.target.value as "free"|"pro"|"agency"})}><option value="free">Free</option><option value="pro">Pro</option><option value="agency">Agency</option></select></label>
+            <p className="text-xs text-muted-foreground sm:col-span-2">{text("Een handmatige instelling blijft gelden totdat je weer automatisch beheer kiest en opslaat. Dit wijzigt de toegang, niet lopende betalingen of facturen.", "A manual assignment stays in effect until you select automatic management and save. This changes access, not ongoing payments or invoices.")}</p>
             <label className="space-y-1 text-sm">{text("Publieke gebruikersnaam", "Public username")}<Input value={account.publicSlug} maxLength={40} onChange={e=>setAccount({...account,publicSlug:e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,"")})}/></label>
             <label className="space-y-1 text-sm sm:col-span-2">{text("Openbare biografie", "Public biography")}<Textarea value={account.biography} maxLength={500} onChange={e=>setAccount({...account,biography:e.target.value})}/><span className="block text-right text-xs text-muted-foreground">{account.biography.length}/500</span></label>
             <label className="space-y-1 text-sm sm:col-span-2">{text("Bezochte landen", "Visited countries")}<Input value={account.visitedCountries.join(", ")} onChange={e=>setAccount({...account,visitedCountries:e.target.value.split(",").map(value=>value.trim()).filter(Boolean).slice(0,100)})}/><span className="block text-xs text-muted-foreground">{text("Komma-gescheiden; maximaal 100 landen.","Comma-separated; up to 100 countries.")}</span></label>

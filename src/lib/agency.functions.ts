@@ -346,22 +346,23 @@ async function ownerWorkspace(db: any, userId: string) {
 }
 
 async function workspaceForPermission(db: any, userId: string, permission: AgencyPermission) {
-  const { data: owned } = await db
+  const { data: owned, error: ownedError } = await db
     .from("workspaces")
     .select("workspace_uuid,user_id,plan")
     .eq("user_id", userId)
     .maybeSingle();
+  if (ownedError) throw new Error("AGENCY_ACCESS_REQUIRED");
   if (owned?.plan === "agency")
     return { workspaceId: owned.workspace_uuid, ownerId: owned.user_id, role: "owner" as const };
-  const { data: member } = await db
+  const { data: member, error: memberError } = await db
     .from("workspace_members")
     .select("workspace_uuid,role,permission_overrides")
     .eq("user_id", userId)
     .eq("status", "active")
     .in("role", ["advisor", "finance"])
     .maybeSingle();
-  if (!member) throw new Error("AGENCY_ACCESS_REQUIRED");
-  const [{ data: workspace }, { data: defaults }] = await Promise.all([
+  if (memberError || !member) throw new Error("AGENCY_ACCESS_REQUIRED");
+  const [{ data: workspace, error: workspaceError }, { data: defaults, error: defaultsError }] = await Promise.all([
     db
       .from("workspaces")
       .select("user_id,plan")
@@ -375,7 +376,7 @@ async function workspaceForPermission(db: any, userId: string, permission: Agenc
       .maybeSingle(),
   ]);
   if (
-    workspace?.plan !== "agency" ||
+    workspaceError || defaultsError || workspace?.plan !== "agency" ||
     !effectiveAgencyPermissions(member.role, defaults?.permissions, member.permission_overrides)[
       permission
     ]
@@ -873,6 +874,12 @@ export const createAgencyFormRequest = createServerFn({ method: "POST" })
     ]);
     if (template.error || client.error || settings.error || !client.data.email)
       throw new Error("FORM_REQUEST_DATA_INVALID");
+    if (data.tripId) {
+      const { data: trip, error: tripError } = await db.from("trips")
+        .select("trip_uuid").eq("trip_uuid", data.tripId)
+        .eq("workspace_uuid", access.workspaceId).maybeSingle();
+      if (tripError || !trip) throw new Error("FORM_REQUEST_TRIP_INVALID");
+    }
     const plain = token(),
       hash = await sha256(plain),
       days = Math.min(30, Math.max(1, Math.round(data.expiresInDays))),
@@ -2051,6 +2058,12 @@ export const applyAgencyContentItem = createServerFn({ method: "POST" })
       throw new Error("INVALID_CONTENT_APPLICATION");
     const db = await adminClient();
     const access = await workspaceForPermission(db, context.userId, "trips_plan");
+    const { data: item, error: itemError } = await db.from("agency_content_library")
+      .select("owner_user_id,visibility,status").eq("id", data.itemId)
+      .eq("workspace_uuid", access.workspaceId).is("archived_at", null).maybeSingle();
+    if (itemError || !item ||
+      (item.owner_user_id !== context.userId && (item.visibility === "personal" || item.status !== "published")))
+      throw new Error("CONTENT_APPLICATION_FAILED");
     const result = await db.rpc("apply_agency_content_item", {
       p_workspace_uuid: access.workspaceId,
       p_actor: context.userId,

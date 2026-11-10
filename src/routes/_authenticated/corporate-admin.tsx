@@ -4,7 +4,6 @@ import {
   Activity,
   Building2,
   ChevronDown,
-  ClipboardCheck,
   Eye,
   Gauge,
   Inbox,
@@ -127,13 +126,7 @@ function Layout() {
       to: "/corporate-admin/infrastructure",
       label: text("Infrastructuur", "Infrastructure"),
       icon: Server,
-      show: access.data?.role === "owner",
-    },
-    {
-      to: "/corporate-admin/release-checklist",
-      label: text("Releasecheck", "Release check"),
-      icon: ClipboardCheck,
-      show: permissions?.operations,
+      show: access.data?.role === "owner" || permissions?.issues,
     },
     {
       to: "/corporate-admin/governance",
@@ -151,7 +144,7 @@ function Layout() {
       to: "/corporate-admin/issues",
       label: text("Problemen", "Issues"),
       icon: TriangleAlert,
-      show: permissions?.issues,
+      show: permissions?.operations,
     },
     {
       to: "/corporate-admin/feedback",

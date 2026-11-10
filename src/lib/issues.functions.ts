@@ -1,36 +1,29 @@
+import { runAdminEffect } from "./audited-admin-fetch";
+import { savePlatformPlan } from "./workspace-plan.server";
+import { validateDevelopmentInput } from "./development";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { deleteUserWithStorage } from "./account-deletion.server";
+import { validatePlatformAnnouncementInput, type PlatformAnnouncementInput } from "./platform-incident";
 
-type IssueInput = {
-  id?: string;
-  titleNl: string;
-  titleEn: string;
-  descriptionNl: string;
-  descriptionEn: string;
-  status: "investigating" | "planned" | "monitoring" | "resolved";
-  severity: "low" | "medium" | "high" | "critical";
-  public: boolean;
-  category: "bug" | "improvement" | "idea" | "usability" | "translation" | "security" | "other";
-};
-
-async function adminDb(userId: string) {
+async function adminDb(userId: string, permission: "operations" | "users" | "issues" | "agencies" | "overview") {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const db = supabaseAdmin as any;
   const { data, error } = await db.auth.admin.getUserById(userId);
-  const { data: assigned } = await db
+  const { data: assigned, error: assignmentError } = await db
     .from("platform_admins")
-    .select("role")
+    .select("role,permissions")
     .eq("user_id", userId)
     .eq("active", true)
     .maybeSingle();
-  if (error || data.user?.app_metadata?.corporate_admin !== true || !assigned) {
+  if (error || assignmentError || data.user?.app_metadata?.corporate_admin !== true || !assigned ||
+    (permission !== "overview" && assigned.role !== "owner" && assigned.permissions?.[permission] !== true)) {
     await audit(db, userId, "admin.access", "platform", null, "failure", {
       reason: "authorization_denied",
     });
     throw new Error("FORBIDDEN");
   }
-  return db;
+  return (await import("./audited-admin.server")).createAuditedAdminClient(userId, permission);
 }
 
 async function audit(
@@ -50,10 +43,46 @@ async function audit(
     result,
     details,
   });
-  if (error) console.error("[Corporate Admin] Auditlog kon niet worden geschreven.", error);
+  if (error) {
+    console.error(JSON.stringify({ event: "admin.audit_failed", code: "ADMIN_AUDIT_WRITE_FAILED" }));
+    throw new Error("ADMIN_AUDIT_WRITE_FAILED");
+  }
 }
 
-async function syncGithub(issue: any) {
+export type ApplicationDiagnosticRow = {
+  id: string; operation: string; code: string; first_seen: string; last_seen: string;
+  first_release: string; last_release: string; samples: number; status: "open" | "resolved";
+};
+export const getApplicationDiagnostics = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth]).handler(async ({ context }) => {
+    const db = await adminDb(context.userId, "operations");
+    const [control, rows] = await Promise.all([
+      db.from("application_diagnostic_control").select("enabled,notifications_enabled").eq("singleton", true).single(),
+      db.from("application_diagnostics").select("id,operation,code,first_seen,last_seen,first_release,last_release,samples,status").order("last_seen", { ascending: false }).limit(50),
+    ]);
+    if (control.error || rows.error) throw new Error("DIAGNOSTICS_UNAVAILABLE");
+    return { enabled: Boolean(control.data.enabled), notificationsEnabled: Boolean(control.data.notifications_enabled),
+      rows: (rows.data ?? []) as ApplicationDiagnosticRow[],
+    };
+  });
+
+export const manageApplicationDiagnostic = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { action: "enable" | "disable" | "alerts_on" | "alerts_off" | "resolve"; id?: string }) => {
+    const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+    if (!input || !["enable", "disable", "alerts_on", "alerts_off", "resolve"].includes(input.action)
+      || (input.action === "resolve" && !uuid.test(input.id ?? ""))) throw new Error("INVALID_DIAGNOSTIC_ACTION");
+    return input;
+  }).handler(async ({ data, context }) => {
+    const db = await adminDb(context.userId, "operations");
+    const { error } = await db.rpc("manage_application_diagnostic", {
+      p_actor: context.userId, p_action: data.action, p_id: data.id ?? null, p_issue: null,
+    });
+    if (error) throw new Error("DIAGNOSTIC_UPDATE_FAILED");
+    return { ok: true };
+  });
+
+async function syncGithub(issue: any, db: any, actor: string) {
   const token = process.env["GITHUB_ISSUES_TOKEN"]?.trim();
   const repository = process.env["GITHUB_ISSUES_REPOSITORY"]
     ?.trim()
@@ -67,7 +96,7 @@ async function syncGithub(issue: any) {
   const payload = existing
     ? { title: issue.title_en, body, state: issue.status === "resolved" ? "closed" : "open" }
     : { title: issue.title_en, body };
-  const response = await fetch(
+  const response = await runAdminEffect(db, actor, "issues", "development.github", String(issue.id ?? ""), () => fetch(
     existing
       ? `https://api.github.com/repos/${owner}/${repo}/issues/${existing}`
       : `https://api.github.com/repos/${owner}/${repo}/issues`,
@@ -81,8 +110,9 @@ async function syncGithub(issue: any) {
         "User-Agent": "GlobeTrotr-Corporate-Admin",
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(10_000),
     },
-  );
+  ));
   if (!response.ok) {
     console.error(`[GitHub Issues] Synchronisatie mislukt met HTTP ${response.status}.`);
     return { synced: false, reason: `http_${response.status}` };
@@ -91,10 +121,20 @@ async function syncGithub(issue: any) {
   return { synced: true, number: result.number };
 }
 
+export const getDevelopmentData = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth]).handler(async ({ context }) => {
+    const db = await adminDb(context.userId, "issues");
+    const { data, error } = await db.from("known_issues").select("*").order("created_at", { ascending: false }).limit(500);
+    if (error) throw new Error("DEVELOPMENT_DATA_UNAVAILABLE");
+    const repository = process.env.GITHUB_ISSUES_REPOSITORY?.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "");
+    const repositoryUrl = repository && /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(repository) ? `https://github.com/${repository}` : null;
+    return { issues: data ?? [], repositoryUrl, syncConfigured: Boolean(repositoryUrl && process.env.GITHUB_ISSUES_TOKEN?.trim()), limit: 500 };
+  });
+
 export const getCorporateAgencies = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const db = await adminDb(context.userId);
+    const db = await adminDb(context.userId, "agencies");
     const { data, error } = await db
       .from("workspaces")
       .select(
@@ -122,7 +162,7 @@ export const getCorporateAgencies = createServerFn({ method: "GET" })
 export const listPublicTripsForModeration = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const db = await adminDb(context.userId);
+    const db = await adminDb(context.userId, "issues");
     const { data, error } = await db
       .from("trips")
       .select(
@@ -149,7 +189,7 @@ export const moderatePublicTrip = createServerFn({ method: "POST" })
       input,
   )
   .handler(async ({ data, context }) => {
-    const db = await adminDb(context.userId),
+    const db = await adminDb(context.userId, "issues"),
       reason = data.reason.trim();
     if (!/^[0-9a-f-]{36}$/i.test(data.tripId) || reason.length < 5 || reason.length > 500)
       throw new Error("INVALID_MODERATION");
@@ -212,7 +252,7 @@ export const saveCorporateAgencySettings = createServerFn({ method: "POST" })
     }) => input,
   )
   .handler(async ({ data, context }) => {
-    const db = await adminDb(context.userId);
+    const db = await adminDb(context.userId, "agencies");
     const reason = data.reason.trim();
     if (!/^[0-9a-f-]{36}$/i.test(data.ownerId) || reason.length < 5)
       throw new Error("INVALID_INPUT");
@@ -236,28 +276,31 @@ export const saveCorporateAgencySettings = createServerFn({ method: "POST" })
 export const getCorporateAdminData = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const db = await adminDb(context.userId);
-    const [feedback, feedbackReplies, issues, workspaces, trips, auditLog, profiles, authUsers] =
+    const db = await adminDb(context.userId, "overview");
+    const { data: capabilities, error: capabilityError } = await db.from("platform_admins")
+      .select("role,permissions").eq("user_id", context.userId).eq("active", true).single();
+    if (capabilityError || !capabilities) throw new Error("FORBIDDEN");
+    const allowed = (permission: string) => capabilities.role === "owner" || capabilities.permissions?.[permission] === true;
+    const empty = { data: [], error: null };
+    const [feedback, feedbackReplies, workspaces, trips, auditLog, profiles, authUsers] =
       await Promise.all([
-        db.from("beta_feedback").select("*").order("created_at", { ascending: false }),
-        db
+        allowed("issues") ? db.from("beta_feedback").select("*").order("created_at", { ascending: false }) : empty,
+        allowed("issues") ? db
           .from("feedback_replies")
           .select("id,feedback_id,author_user_id,body,created_at")
-          .order("created_at"),
-        db.from("known_issues").select("*").order("created_at", { ascending: false }),
+          .order("created_at") : empty,
         db.from("workspaces").select("user_id, plan, created_at, updated_at"),
         db.from("trips").select("archived, is_public"),
-        db
+        allowed("operations") ? db
           .from("platform_admin_audit_log")
           .select("id, actor_user_id, action, target_type, target_id, result, details, created_at")
           .order("created_at", { ascending: false })
-          .limit(30),
-        db.from("profiles").select("id, display_name, email, locale, created_at, updated_at"),
-        db.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+          .limit(30) : empty,
+        (allowed("users") || allowed("operations")) ? db.from("profiles").select("id, display_name, email, locale, created_at, updated_at") : empty,
+        (allowed("users") || allowed("operations")) ? db.auth.admin.listUsers({ page: 1, perPage: 1000 }) : { data: { users: [] }, error: null },
       ]);
     if (feedback.error) throw feedback.error;
     if (feedbackReplies.error) throw feedbackReplies.error;
-    if (issues.error) throw issues.error;
     if (workspaces.error) throw workspaces.error;
     if (trips.error) throw trips.error;
     if (auditLog.error) throw auditLog.error;
@@ -266,7 +309,6 @@ export const getCorporateAdminData = createServerFn({ method: "GET" })
     const workspaceRows = workspaces.data ?? [];
     const tripRows = trips.data ?? [];
     const feedbackRows = feedback.data ?? [];
-    const issueRows = issues.data ?? [];
     const profileById = new Map((profiles.data ?? []).map((profile: any) => [profile.id, profile]));
     const workspaceById = new Map(
       workspaceRows.map((workspace: any) => [workspace.user_id, workspace]),
@@ -276,7 +318,6 @@ export const getCorporateAdminData = createServerFn({ method: "GET" })
     return {
       feedback: feedbackRows,
       feedbackReplies: feedbackReplies.data ?? [],
-      issues: issueRows,
       auditLog: (auditLog.data ?? []).map((entry: any) => {
         const actor: any = profileById.get(entry.actor_user_id);
         const authActor = authUsers.data.users.find((user: any) => user.id === entry.actor_user_id);
@@ -290,7 +331,7 @@ export const getCorporateAdminData = createServerFn({ method: "GET" })
           targetEmail: target?.email || authTarget?.email || "",
         };
       }),
-      users: authUsers.data.users.map((user: any) => {
+      users: (allowed("users") ? authUsers.data.users : []).map((user: any) => {
         const profile: any = profileById.get(user.id);
         const workspace: any = workspaceById.get(user.id);
         return {
@@ -323,8 +364,6 @@ export const getCorporateAdminData = createServerFn({ method: "GET" })
         openFeedback: feedbackRows.filter(
           (row: any) => !row.archived_at && !["resolved", "closed"].includes(row.status),
         ).length,
-        openIssues: issueRows.filter((row: any) => !row.archived_at && row.status !== "resolved")
-          .length,
       },
     };
   });
@@ -333,7 +372,7 @@ export const getPlatformUserDetail = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((input: { userId: string }) => input)
   .handler(async ({ data, context }) => {
-    const db = await adminDb(context.userId);
+    const db = await adminDb(context.userId, "users");
     if (!/^[0-9a-f-]{36}$/i.test(data.userId)) throw new Error("INVALID_INPUT");
 
     const [authUser, profile, workspace, ownedTrips, memberships, agencyMemberships] = await Promise.all([
@@ -373,6 +412,10 @@ export const getPlatformUserDetail = createServerFn({ method: "GET" })
     if (memberships.error) throw memberships.error;
     if (agencyMemberships.error) throw agencyMemberships.error;
 
+    const manualPlan = workspace.data
+      ? await db.from("workspace_plan_overrides").select("plan").eq("workspace_uuid", workspace.data.workspace_uuid).maybeSingle()
+      : { data: null, error: null };
+    if (manualPlan.error) throw manualPlan.error;
     const memberWorkspaceIds=(agencyMemberships.data??[]).map((membership:any)=>membership.workspace_uuid);
     const agencyMemberWorkspace=memberWorkspaceIds.length
       ? await db.from("workspaces").select("workspace_uuid").in("workspace_uuid",memberWorkspaceIds).eq("plan","agency").limit(1)
@@ -409,6 +452,7 @@ export const getPlatformUserDetail = createServerFn({ method: "GET" })
           ? {
             id: workspace.data.workspace_uuid,
             plan: workspace.data.plan ?? "free",
+            manualPlan: manualPlan.data?.plan ?? null,
             publicSharingEnabled: Boolean(workspace.data.share_enabled),
             createdAt: workspace.data.created_at,
             updatedAt: workspace.data.updated_at,
@@ -436,13 +480,15 @@ export const getPlatformUserDetail = createServerFn({ method: "GET" })
 
 export const updatePlatformUserAccount = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: { userId: string; displayName: string; email: string; phone: string; locale: "nl-NL" | "en-GB"; plan: "free" | "pro" | "agency"; publicSlug: string; biography: string; publicProfileEnabled: boolean; friendRequestsEnabled: boolean; visitedCountries: string[]; reason: string }) => input)
+  .validator((input: { userId: string; displayName: string; email: string; phone: string; locale: "nl-NL" | "en-GB"; plan: "free" | "pro" | "agency"; planMode?: "manual" | "automatic"; planChange?: boolean; publicSlug: string; biography: string; publicProfileEnabled: boolean; friendRequestsEnabled: boolean; visitedCountries: string[]; reason: string }) => input)
   .handler(async ({ data, context }) => {
-    const db = await adminDb(context.userId);
+    const db = await adminDb(context.userId, "users");
     const email = data.email.trim().toLowerCase(), phone = data.phone.trim(), displayName = data.displayName.trim(), reason = data.reason.trim(),publicSlug=data.publicSlug.trim().toLowerCase(),biography=data.biography.trim();
     const reserved=new Set(["admin","administrator","api","auth","billing","contact","corp","corporate-admin","dashboard","globetrotr","help","journal","login","privacy","register","root","security","status","support","trips","users","vrienden"]);
     const visitedCountries=[...new Map((data.visitedCountries??[]).map(country=>country.trim()).filter(country=>country.length>=2&&country.length<=80).map(country=>[country.toLocaleLowerCase(),country])).values()].slice(0,100);
-    if (!/^[0-9a-f-]{36}$/i.test(data.userId) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || displayName.length > 120 || phone.length > 40 || biography.length>500 || visitedCountries.length!==(data.visitedCountries??[]).length || (publicSlug&&(!/^[a-z0-9][a-z0-9-]{2,39}$/.test(publicSlug)||reserved.has(publicSlug))) || (data.publicProfileEnabled&&!publicSlug) || !["nl-NL", "en-GB"].includes(data.locale) || !["free","pro","agency"].includes(data.plan) || reason.length < 10 || reason.length > 500) throw new Error("INVALID_INPUT");
+    if ((data.planChange !== undefined && typeof data.planChange !== "boolean") || (data.planMode !== undefined && !["manual","automatic"].includes(data.planMode)) || !/^[0-9a-f-]{36}$/i.test(data.userId) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || displayName.length > 120 || phone.length > 40 || biography.length>500 || visitedCountries.length!==(data.visitedCountries??[]).length || (publicSlug&&(!/^[a-z0-9][a-z0-9-]{2,39}$/.test(publicSlug)||reserved.has(publicSlug))) || (data.publicProfileEnabled&&!publicSlug) || !["nl-NL", "en-GB"].includes(data.locale) || !["free","pro","agency"].includes(data.plan) || reason.length < 10 || reason.length > 500) throw new Error("INVALID_INPUT");
+    const { data: beforeWorkspace, error: workspaceReadError } = await db.from("workspaces").select("plan").eq("user_id", data.userId).maybeSingle();
+    if (workspaceReadError || !beforeWorkspace) throw workspaceReadError ?? new Error("WORKSPACE_NOT_FOUND");
     const { data: current, error: readError } = await db.auth.admin.getUserById(data.userId);
     if (readError || !current.user) throw readError ?? new Error("USER_NOT_FOUND");
     const { error: authError } = await db.auth.admin.updateUserById(data.userId, {
@@ -453,8 +499,7 @@ export const updatePlatformUserAccount = createServerFn({ method: "POST" })
     if (authError) throw authError;
     const { error: profileError } = await db.from("profiles").upsert({ id: data.userId, email, display_name: displayName || null, locale: data.locale,public_slug:publicSlug||null,biography:biography||null,public_profile_enabled:data.publicProfileEnabled,friend_requests_enabled:data.friendRequestsEnabled,visited_countries:visitedCountries, updated_at: new Date().toISOString() });
     if (profileError) throw profileError;
-    const { error: workspaceError } = await db.from("workspaces").update({ plan: data.plan, updated_at: new Date().toISOString() }).eq("user_id", data.userId);
-    if (workspaceError) throw workspaceError;
+    await savePlatformPlan(db, context.userId, beforeWorkspace.plan, data);
     await audit(db, context.userId, "user.profile.update", "user", data.userId, "success", { reason, changed: ["display_name", "email", "phone", "locale","plan","public_slug","biography","public_profile_enabled","friend_requests_enabled","visited_countries"] });
     return { ok: true };
   });
@@ -463,7 +508,7 @@ export const unlinkPlatformUserIdentity = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: { userId: string; identityId: string; reason: string }) => input)
   .handler(async ({ data, context }) => {
-    const db = await adminDb(context.userId), reason = data.reason.trim();
+    const db = await adminDb(context.userId, "users"), reason = data.reason.trim();
     if (!/^[0-9a-f-]{36}$/i.test(data.userId) || !data.identityId || reason.length < 10 || reason.length > 500) throw new Error("INVALID_INPUT");
     const { data: target, error } = await db.auth.admin.getUserById(data.userId);
     if (error || !target.user) throw error ?? new Error("USER_NOT_FOUND");
@@ -473,7 +518,7 @@ export const unlinkPlatformUserIdentity = createServerFn({ method: "POST" })
     if (!base || !key) throw new Error("ADMIN_IDENTITY_API_UNAVAILABLE");
     const headers: Record<string,string> = { apikey: key };
     if (!key.startsWith("sb_secret_")) headers.Authorization = `Bearer ${key}`;
-    const response = await fetch(`${base}/auth/v1/admin/users/${encodeURIComponent(data.userId)}/identities/${encodeURIComponent(data.identityId)}`, { method: "DELETE", headers });
+    const response = await runAdminEffect(db, context.userId, "users", "auth.action", data.userId, () => fetch(`${base}/auth/v1/admin/users/${encodeURIComponent(data.userId)}/identities/${encodeURIComponent(data.identityId)}`, { method: "DELETE", headers, signal: AbortSignal.timeout(15_000) }));
     if (!response.ok) throw new Error("IDENTITY_UNLINK_FAILED");
     await audit(db, context.userId, "user.identity.unlink", "user", data.userId, "success", { reason, provider: identity.provider });
     return { ok: true };
@@ -483,7 +528,7 @@ export const deletePlatformUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: { userId: string; notify: boolean; reason: string }) => input)
   .handler(async ({ data, context }) => {
-    const db = await adminDb(context.userId), reason = data.reason.trim();
+    const db = await adminDb(context.userId, "users"), reason = data.reason.trim();
     if (!/^[0-9a-f-]{36}$/i.test(data.userId) || reason.length < 10 || reason.length > 500 || data.userId === context.userId) throw new Error("INVALID_INPUT");
     const [{ data: target, error }, profile, delivery] = await Promise.all([
       db.auth.admin.getUserById(data.userId),
@@ -510,7 +555,7 @@ export const setPlatformUserBlocked = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: { userId: string; blocked: boolean; reason: string }) => input)
   .handler(async ({ data, context }) => {
-    const db = await adminDb(context.userId);
+    const db = await adminDb(context.userId, "users");
     const reason = data.reason.trim();
     if (!/^[0-9a-f-]{36}$/i.test(data.userId) || reason.length < 10 || reason.length > 500)
       throw new Error("INVALID_INPUT");
@@ -573,7 +618,7 @@ export const resetPlatformUserMfa = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: { userId: string; reason: string }) => input)
   .handler(async ({ data, context }) => {
-    const db = await adminDb(context.userId);
+    const db = await adminDb(context.userId, "users");
     const reason = data.reason.trim();
     if (!/^[0-9a-f-]{36}$/i.test(data.userId) || reason.length < 10 || reason.length > 500)
       throw new Error("INVALID_INPUT");
@@ -615,7 +660,7 @@ export const updatePlatformUser = createServerFn({ method: "POST" })
     }) => input,
   )
   .handler(async ({ data, context }) => {
-    const db = await adminDb(context.userId);
+    const db = await adminDb(context.userId, "users");
     const displayName = data.displayName.trim();
     const reason = data.reason.trim();
     if (
@@ -647,11 +692,7 @@ export const updatePlatformUser = createServerFn({ method: "POST" })
       .update({ display_name: displayName, locale: data.locale })
       .eq("id", data.userId);
     if (profileError) throw profileError;
-    const { error: workspaceError } = await db
-      .from("workspaces")
-      .update({ plan: data.plan })
-      .eq("user_id", data.userId);
-    if (workspaceError) throw workspaceError;
+    await savePlatformPlan(db, context.userId, beforeWorkspace.plan, data);
     await audit(db, context.userId, "user.update", "user", data.userId, "success", {
       reason,
       changes: {
@@ -700,7 +741,7 @@ const providerNames = [
 export const getPlatformOperations = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const db = await adminDb(context.userId);
+    const db = await adminDb(context.userId, "operations");
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const [controls, usage, failedJobs] = await Promise.all([
       db
@@ -734,7 +775,7 @@ export const setPlatformProviderEnabled = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: { provider: string; enabled: boolean; reason: string }) => input)
   .handler(async ({ data, context }) => {
-    const db = await adminDb(context.userId);
+    const db = await adminDb(context.userId, "users");
     if (!providerNames.includes(data.provider as (typeof providerNames)[number]))
       throw new Error("INVALID_PROVIDER");
     const reason = data.reason.trim();
@@ -766,7 +807,7 @@ export const setPlatformProviderEnabled = createServerFn({ method: "POST" })
 export const runPlatformHealthChecks = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const db = await adminDb(context.userId);
+    const db = await adminDb(context.userId, "operations");
     const githubToken = process.env["GITHUB_ISSUES_TOKEN"]?.trim();
     const githubRepository = process.env["GITHUB_ISSUES_REPOSITORY"]
       ?.trim()
@@ -791,7 +832,7 @@ export const runPlatformHealthChecks = createServerFn({ method: "POST" })
             { Accept: "application/json", "User-Agent": "GlobeTrotr/1.0 info@globetrotr.nl" },
           ),
       ),
-      timedCheck("rates", () => reachable("https://api.frankfurter.app/latest?from=EUR&to=USD")),
+      timedCheck("rates", () => reachable("https://api.frankfurter.dev/v1/latest?base=EUR&symbols=USD")),
       timedCheck(
         "github",
         () =>
@@ -802,7 +843,6 @@ export const runPlatformHealthChecks = createServerFn({ method: "POST" })
           }),
         Boolean(githubToken && githubRepository),
       ),
-      timedCheck("flights", async () => true, Boolean(process.env["AERODATABOX_RAPIDAPI_KEY"]?.trim() || process.env["SKYLINK_API_KEY"]?.trim())),
       timedCheck(
         "worker",
         () => reachable(process.env["WORKER_HEALTH_URL"]!),
@@ -819,11 +859,10 @@ export const runPlatformHealthChecks = createServerFn({ method: "POST" })
       storage: "storage",
       weather: "weather",
       rates: "rates",
-      flights: "flights",
       worker: "worker",
       mail_server: "mail_server",
     };
-    await Promise.all(
+    const saved = await Promise.all(
       checks
         .filter((check) => publicKeys[check.name])
         .map((check) =>
@@ -838,14 +877,8 @@ export const runPlatformHealthChecks = createServerFn({ method: "POST" })
             .eq("component_key", publicKeys[check.name]),
         ),
     );
-    await db
-      .from("platform_status_components")
-      .update({
-        status: "operational",
-        checked_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("component_key", "web");
+    if (saved.some(result => result.error)) throw new Error("PLATFORM_STATUS_SAVE_FAILED");
+    // Only the independent external probe can confirm website reachability.
     await audit(db, context.userId, "platform.health_check", "platform", null, "success", {
       overall_status: checks.some((check) => check.status === "degraded")
         ? "degraded"
@@ -855,11 +888,11 @@ export const runPlatformHealthChecks = createServerFn({ method: "POST" })
     return { checkedAt: new Date().toISOString(), checks };
   });
 
-export const saveKnownIssue = createServerFn({ method: "POST" })
+export const saveDevelopmentIssue = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: IssueInput) => input)
+  .validator(validateDevelopmentInput)
   .handler(async ({ data, context }) => {
-    const db = await adminDb(context.userId);
+    const db = await adminDb(context.userId, "issues");
     const row = {
       title_nl: data.titleNl.trim(),
       title_en: data.titleEn.trim(),
@@ -868,7 +901,7 @@ export const saveKnownIssue = createServerFn({ method: "POST" })
       category: data.category,
       status: data.status,
       severity: data.severity,
-      public: data.public,
+      public: false,
       updated_at: new Date().toISOString(),
     };
     const query = data.id
@@ -878,9 +911,9 @@ export const saveKnownIssue = createServerFn({ method: "POST" })
     if (error) throw error;
     let github: Awaited<ReturnType<typeof syncGithub>>;
     try {
-      github = await syncGithub(saved);
+      github = await syncGithub(saved, db, context.userId);
     } catch (error) {
-      console.error("[GitHub Issues] Synchronisatieverzoek kon niet worden uitgevoerd.", error);
+      console.error(JSON.stringify({ event: "development.github_sync_failed", code: "GITHUB_SYNC_UNAVAILABLE" }));
       github = { synced: false, reason: "network_error" };
     }
     if (github.synced && saved.github_issue_number !== github.number)
@@ -900,10 +933,10 @@ export const saveKnownIssue = createServerFn({ method: "POST" })
     return { issue: saved, github };
   });
 
-export const syncUnsyncedKnownIssues = createServerFn({ method: "POST" })
+export const syncDevelopmentIssues = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const db = await adminDb(context.userId);
+    const db = await adminDb(context.userId, "issues");
     const { data: issues, error } = await db
       .from("known_issues")
       .select("*")
@@ -917,9 +950,9 @@ export const syncUnsyncedKnownIssues = createServerFn({ method: "POST" })
     for (const issue of issues ?? []) {
       let github: Awaited<ReturnType<typeof syncGithub>>;
       try {
-        github = await syncGithub(issue);
+        github = await syncGithub(issue, db, context.userId);
       } catch (error) {
-        console.error("[GitHub Issues] Synchronisatieverzoek kon niet worden uitgevoerd.", error);
+        console.error(JSON.stringify({ event: "development.github_sync_failed", code: "GITHUB_SYNC_UNAVAILABLE" }));
         github = { synced: false, reason: "network_error" };
       }
       if (github.synced) {
@@ -953,7 +986,7 @@ export const updateFeedbackStatus = createServerFn({ method: "POST" })
       input,
   )
   .handler(async ({ data, context }) => {
-    const db = await adminDb(context.userId);
+    const db = await adminDb(context.userId, "issues");
     const { error } = await db
       .from("beta_feedback")
       .update({ status: data.status, updated_at: new Date().toISOString() })
@@ -969,7 +1002,7 @@ export const replyToFeedback = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: { id: string; body: string }) => input)
   .handler(async ({ data, context }) => {
-    const db = await adminDb(context.userId);
+    const db = await adminDb(context.userId, "issues");
     const body = data.body.trim();
     if (!/^[0-9a-f-]{36}$/i.test(data.id) || body.length < 2 || body.length > 2000)
       throw new Error("INVALID_FEEDBACK_REPLY");
@@ -994,62 +1027,41 @@ export const replyToFeedback = createServerFn({ method: "POST" })
 
 export const publishPlatformAnnouncement = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator(
-    (input: {
-      type: "status" | "update";
-      severity: "info" | "warning" | "critical" | "resolved";
-      titleNl: string;
-      titleEn: string;
-      bodyNl: string;
-      bodyEn: string;
-      statusKey?: string;
-    }) => input,
-  )
+  .validator((input: PlatformAnnouncementInput) => validatePlatformAnnouncementInput(input))
   .handler(async ({ data, context }) => {
-    const db = await adminDb(context.userId);
-    const values = [data.titleNl, data.titleEn, data.bodyNl, data.bodyEn].map((value) =>
-      value.trim(),
-    );
-    if (
-      values.some((value) => value.length < 3) ||
-      values[0]!.length > 120 ||
-      values[1]!.length > 120 ||
-      values[2]!.length > 1000 ||
-      values[3]!.length > 1000
-    ) {
-      throw new Error("INVALID_ANNOUNCEMENT");
-    }
-    const { data: announcementId, error } = await db.rpc("publish_platform_announcement_v2", {
+    const db = await adminDb(context.userId, "operations");
+    const { error } = await db.rpc("publish_platform_announcement_v3", {
       p_actor_id: context.userId,
+      p_request_id: data.requestId,
+      p_expected_latest_id: data.expectedLatestId,
       p_announcement_type: data.type,
       p_severity: data.severity,
-      p_title_nl: values[0],
-      p_title_en: values[1],
-      p_body_nl: values[2],
-      p_body_en: values[3],
-      p_status_key: data.type === "status" && data.statusKey ? data.statusKey : null,
+      p_title_nl: data.titleNl,
+      p_title_en: data.titleEn,
+      p_body_nl: data.bodyNl,
+      p_body_en: data.bodyEn,
+      p_status_key: data.statusKey ?? null,
+      p_public_status: data.publicStatus,
+      p_component_keys: data.componentKeys,
+      p_incident_phase: data.phase,
     });
-    if (error) throw error;
-    await audit(
-      db,
-      context.userId,
-      "platform.announcement.publish",
-      "platform_announcement",
-      announcementId,
-      "success",
-      { type: data.type, severity: data.severity },
-    );
+    if (error) {
+      if (error.message === "PLATFORM_STATUS_ALREADY_ACTIVE" || error.message === "PLATFORM_STATUS_CHANGED")
+        throw new Error(error.message);
+      throw new Error("ANNOUNCEMENT_PUBLISH_FAILED");
+    }
+    // Publication, existing notifications and audit are committed together in SQL.
     return { published: true };
   });
 
 export const listPlatformAnnouncements = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const db = await adminDb(context.userId);
+    const db = await adminDb(context.userId, "operations");
     const { data, error } = await db
       .from("platform_announcements")
       .select(
-        "id,announcement_type,severity,title_nl,title_en,body_nl,body_en,status_key,published_at",
+        "id,announcement_type,severity,title_nl,title_en,body_nl,body_en,status_key,published_at,public_status,component_keys,incident_phase",
       )
       .not("published_at", "is", null)
       .order("published_at", { ascending: false })
@@ -1068,7 +1080,7 @@ export const listPlatformAnnouncements = createServerFn({ method: "GET" })
 export const getNotificationDeliveryOverview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const db = await adminDb(context.userId);
+    const db = await adminDb(context.userId, "operations");
     const { data, error } = await db
       .from("notifications")
       .select("kind,dismissed_at,created_at")
@@ -1101,13 +1113,41 @@ export const getNotificationDeliveryOverview = createServerFn({ method: "GET" })
 
 export const manageAdminRecord = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
+  .validator((input: { kind: "feedback"; id: string; action: "archive" | "restore" | "delete" }) => {
+    if (!input || input.kind !== "feedback" || !["archive", "restore", "delete"].includes(input.action)
+      || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(input.id))
+      throw new Error("INVALID_ADMIN_RECORD");
+    return input;
+  })
+  .handler(async ({ data, context }) => {
+    const db = await adminDb(context.userId, "issues");
+    const table = "beta_feedback";
+    if (data.action === "delete") {
+      const { error } = await db.from(table).delete().eq("id", data.id);
+      if (error) throw error;
+    } else {
+      const archived_at = data.action === "archive" ? new Date().toISOString() : null;
+      const { error } = await db.from(table)
+        .update({ archived_at, updated_at: new Date().toISOString() }).eq("id", data.id).select("id").single();
+      if (error) throw error;
+    }
+    await audit(db, context.userId, `feedback.${data.action}`, "feedback", data.id, "success");
+    return { ok: true };
+  });
+
+export const manageDevelopmentRecord = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .validator(
-    (input: { kind: "feedback" | "issue"; id: string; action: "archive" | "restore" | "delete" }) =>
-      input,
+    (input: { kind: "issue"; id: string; action: "archive" | "restore" | "delete" }) =>
+      {
+        if (!input || input.kind !== "issue" || !["archive", "restore", "delete"].includes(input.action)
+          || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(input.id)) throw new Error("INVALID_DEVELOPMENT_RECORD");
+        return input;
+      },
   )
   .handler(async ({ data, context }) => {
-    const db = await adminDb(context.userId);
-    const table = data.kind === "feedback" ? "beta_feedback" : "known_issues";
+    const db = await adminDb(context.userId, "issues");
+    const table = "known_issues";
     if (data.action === "delete") {
       if (data.kind === "issue") {
         const { data: issue } = await db.from(table).select("*").eq("id", data.id).single();
@@ -1117,7 +1157,7 @@ export const manageAdminRecord = createServerFn({ method: "POST" })
             status: "resolved",
             title_en: `[Removed] ${issue.title_en}`,
             public: false,
-          });
+          }, db, context.userId);
         }
       }
       const { error } = await db.from(table).delete().eq("id", data.id);
@@ -1132,7 +1172,7 @@ export const manageAdminRecord = createServerFn({ method: "POST" })
         .single();
       if (error) throw error;
       if (data.kind === "issue" && row.github_issue_number)
-        await syncGithub({ ...row, status: data.action === "archive" ? "resolved" : row.status });
+        await syncGithub({ ...row, status: data.action === "archive" ? "resolved" : row.status }, db, context.userId);
     }
     await audit(db, context.userId, `${data.kind}.${data.action}`, data.kind, data.id, "success");
     return { ok: true };

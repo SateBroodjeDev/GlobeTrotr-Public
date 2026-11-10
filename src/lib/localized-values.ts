@@ -1,4 +1,5 @@
 import type { AppLocale } from "@/lib/locale";
+import { GLOBETROTR_SLOGAN } from "./branding.ts";
 
 const COUNTRY_EN: Record<string, string> = {
   Nederland: "Netherlands", Noorwegen: "Norway", Denemarken: "Denmark", Zweden: "Sweden",
@@ -15,8 +16,8 @@ export function localizeCountry(value: string, locale: AppLocale) {
 }
 
 export function localizeTagline(value: string, locale: AppLocale) {
-  if (locale === "en-GB" && (value === "Plan elke reis. Volg elke euro." || value === "Plan elke reis. Verantwoord elke euro.")) {
-    return "Plan every trip. Track every euro.";
+  if ([GLOBETROTR_SLOGAN.nl, GLOBETROTR_SLOGAN.en, "Plan elke reis. Volg elke euro.", "Plan elke reis. Verantwoord elke euro.", "Plan every trip. Track every euro."].includes(value)) {
+    return locale === "en-GB" ? GLOBETROTR_SLOGAN.en : GLOBETROTR_SLOGAN.nl;
   }
   if (locale === "en-GB" && value === "Samen op reis, alles geregeld.") {
     return "Travel together, everything organised.";

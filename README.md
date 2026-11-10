@@ -1,6 +1,6 @@
 # 🌍 GlobeTrotr
 
-**Plan the journey. Bring everyone along. Keep the memories.**
+**Your whole trip, planned together in one place.**
 
 A multilingual travel dashboard for solo travellers, groups and travel agencies.
 
@@ -41,7 +41,7 @@ permission. Third-party licences and GitHub platform rights remain unaffected.
 
 ## 🇳🇱 Nederlands
 
-**Elke reis op één plek — van het eerste idee tot de laatste herinnering.**
+**Jullie hele rondreis, samen geregeld op één plek.**
 
 GlobeTrotr bundelt routes, boekingen, dagplanning, samenwerken, gedeelde uitgaven
 en reisdagboeken. Agency biedt klanten, offertes, facturen en teambeheer.

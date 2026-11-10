@@ -1,3 +1,4 @@
+import { readBoundedJson } from "@/lib/bounded-json";
 import { createFileRoute } from "@tanstack/react-router";
 import { issueLease, sha256, usable } from "@/lib/self-hosted-license.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -11,7 +12,7 @@ export const Route = createFileRoute("/api/licensing/v1/lease")({
           if (Number(request.headers.get("content-length") || 0) > 4096)
             return respond({ error: "invalid_request" }, 400);
           const secret = (request.headers.get("authorization") || "").replace(/^Bearer /, ""),
-            body = (await request.json()) as { installationKey?: string; version?: string };
+            body = (await readBoundedJson(request, 4096)) as { installationKey?: string; version?: string };
           if (!secret.startsWith("gti_") || !body.installationKey)
             return respond({ error: "invalid_installation" }, 401);
           const db = supabaseAdmin as any,
@@ -32,10 +33,6 @@ export const Route = createFileRoute("/api/licensing/v1/lease")({
             return respond({ error: "license_unavailable" }, 403);
           if (body.version && String(body.version).length <= 40)
             installation.data.version = body.version;
-          await db
-            .from("self_hosted_installations")
-            .update({ version: installation.data.version })
-            .eq("id", installation.data.id);
           return respond(await issueLease(license.data, installation.data));
         } catch {
           return respond({ error: "invalid_request" }, 400);

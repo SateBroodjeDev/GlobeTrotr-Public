@@ -27,11 +27,13 @@ export function FavoritePlaces({
   editable,
   onAdd,
   text,
+  compact = false,
 }: {
   stops: Stop[];
   editable: boolean;
   onAdd: (place: FavoritePlace) => Promise<boolean>;
   text: (nl: string, en: string) => string;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false),
     [busy, setBusy] = useState("");
@@ -78,15 +80,18 @@ export function FavoritePlaces({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" variant="outline" className="w-full">
-          <Star className="size-4" />
-          {text("Favoriete plaatsen", "Favourite places")}
+        <Button type="button" variant={compact ? "ghost" : "outline"}
+          className={compact ? "size-11 shrink-0 rounded-lg p-0 text-muted-foreground hover:bg-primary/10 hover:text-primary" : "w-full"}
+          aria-label={compact ? text("Favoriete plaatsen openen", "Open favourite places") : undefined}
+          title={text("Favoriete plaatsen", "Favourite places")}>
+          <Star className={`size-4 ${compact && favorites.length > 0 ? "fill-primary/20 text-primary" : ""}`} aria-hidden="true" />
+          {!compact && text("Favoriete plaatsen", "Favourite places")}
           {favorites.length > 0 && (
-            <span className="text-xs text-muted-foreground">({favorites.length})</span>
+            <span className={compact ? "sr-only" : "text-xs text-muted-foreground"}>({favorites.length})</span>
           )}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+      <DialogContent className="max-h-[85vh] grid-cols-[minmax(0,1fr)] overflow-y-auto sm:max-w-xl [&>*]:min-w-0">
         <DialogHeader>
           <DialogTitle>{text("Favoriete plaatsen", "Favourite places")}</DialogTitle>
           <DialogDescription>

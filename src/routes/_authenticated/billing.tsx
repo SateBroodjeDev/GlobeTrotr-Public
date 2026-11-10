@@ -349,6 +349,9 @@ function Billing() {
           </CardHeader>
           <CardContent>
             <select
+              id="reporting-currency"
+              aria-label={text("Rapportagevaluta", "Reporting currency")}
+              aria-describedby="reporting-currency-help"
               className="w-full rounded-lg border border-input bg-card px-3 py-2"
               value={state.baseCurrency}
               onChange={(event) =>
@@ -361,6 +364,12 @@ function Billing() {
                 </option>
               ))}
             </select>
+            <p id="reporting-currency-help" className="mt-3 text-sm leading-relaxed text-muted-foreground">
+              {text(
+                "Kies de valuta waarin je reisuitgaven worden opgeteld en weergegeven. Kies je bijvoorbeeld JPY, dan worden uitgaven in euro's en dollars omgerekend naar yen voor je reistotalen. De oorspronkelijke bedragen blijven behouden. Dit verandert geen betalingen; Pro- en Agency-prijzen blijven in euro's.",
+                "Choose the currency used to add up and display your trip expenses. For example, selecting JPY converts expenses in euros and dollars to yen for your trip totals. The original amounts are preserved. This does not change any payments; Pro and Agency prices remain in euros.",
+              )}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -411,7 +420,7 @@ function Billing() {
                       {text("Factuur downloaden", "Download invoice")}
                     </Button>
                   )}
-                  {transaction.status === "completed" && Number(transaction.total_minor) > 0 && Number(transaction.refunded_minor || 0) === 0 && (refund ? <Badge variant="outline">{text("Terugbetaling", "Refund")}: {refund.status}</Badge> : <Button size="sm" variant="ghost" disabled={busy!==null} onClick={async()=>{const reason=window.prompt(text("Waarom vraag je een terugbetaling aan? Minimaal 10 tekens.","Why are you requesting a refund? At least 10 characters."));if(!reason)return;setBusy(`refund:${transaction.id}`);try{await requestPaddleRefund({data:{transactionId:transaction.provider_transaction_id,reason}});toast.success(text("Verzoek ontvangen. Staff beoordeelt het voordat Paddle iets terugbetaalt.","Request received. Staff will review it before Paddle refunds anything."));await billing.refetch()}catch{toast.error(text("Terugbetaalverzoek kon niet worden opgeslagen.","Refund request could not be saved."))}finally{setBusy(null)}}}>{text("Terugbetaling aanvragen","Request refund")}</Button>)}</div>
+                  {transaction.status === "completed" && Number(transaction.total_minor) > 0 && Number(transaction.refunded_minor || 0) === 0 && (refund ? <Badge variant="outline">{text("Terugbetaling", "Refund")}: {refund.provider_status==="submission_in_progress"?text("Uitkomst nog niet bevestigd","Outcome not yet confirmed"):refund.status}</Badge> : <Button size="sm" variant="ghost" disabled={busy!==null} onClick={async()=>{const reason=window.prompt(text("Waarom vraag je een terugbetaling aan? Minimaal 10 tekens.","Why are you requesting a refund? At least 10 characters."));if(!reason)return;setBusy(`refund:${transaction.id}`);try{await requestPaddleRefund({data:{transactionId:transaction.provider_transaction_id,reason}});toast.success(text("Verzoek ontvangen. Staff beoordeelt het voordat Paddle iets terugbetaalt.","Request received. Staff will review it before Paddle refunds anything."));await billing.refetch()}catch{toast.error(text("Terugbetaalverzoek kon niet worden opgeslagen.","Refund request could not be saved."))}finally{setBusy(null)}}}>{text("Terugbetaling aanvragen","Request refund")}</Button>)}</div>
                 </div>
               )})}
             </div>

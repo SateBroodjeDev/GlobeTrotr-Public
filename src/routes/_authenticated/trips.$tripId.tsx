@@ -1,15 +1,18 @@
+import { updateDestinationDetails } from "@/lib/manual-location";
+import { saveExpenseDraft } from "@/lib/expense-edit";
 import { tripSection } from "@/lib/trip-section";
 import { DeleteTripButton } from "@/components/DeleteTripButton";
+import { DestinationList, DestinationControls } from "@/components/DestinationList";
+import { DestinationDateEditor } from "@/components/DestinationDateEditor";
+import { DestinationSummary } from "@/components/DestinationSummary";
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { ClientOnly } from "@tanstack/react-router";
-import { Suspense, lazy, useCallback, useEffect, useState, type FormEvent } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Archive,
   ArrowDownUp,
-  ArrowDown,
-  ArrowUp,
   Backpack,
   BarChart3,
   BookOpen,
@@ -69,7 +72,7 @@ import { WeatherWidget } from "@/components/WeatherWidget";
 import { CurrencyConverter, FuelCalculator } from "@/components/TripTools";
 import { Settlement } from "@/components/Settlement";
 import { Packing } from "@/components/Packing";
-import { Countdown } from "@/components/Countdown";
+import { TripOverviewHeader } from "@/components/TripOverviewHeader";
 import { TripBookings } from "@/components/TripBookings";
 import { TripMembers } from "@/components/TripMembers";
 import { TripTimeline } from "@/components/TripTimeline";
@@ -77,7 +80,7 @@ import { TripBrandingSettings } from "@/components/TripBrandingSettings";
 import { TripNotificationPreferences } from "@/components/TripNotificationPreferences";
 import { TripDocuments } from "@/components/TripDocuments";
 import { TripTemplateApply } from "@/components/TripTemplateApply";
-import { TripInsights, TripInsightsSummary } from "@/components/TripInsights";
+import { TripInsights } from "@/components/TripInsights";
 import { TripTasks } from "@/components/TripTasks";
 import { TripToday } from "@/components/TripToday";
 import { TripOfflinePack } from "@/components/TripOfflinePack";
@@ -93,7 +96,7 @@ import { TripGpxImport } from "@/components/TripGpxImport";
 import { TripDateShift } from "@/components/TripDateShift";
 import { TripRouteOptimizer } from "@/components/TripRouteOptimizer";
 import { TripRouteLegModes } from "@/components/TripRouteLegModes";
-import { bookingMapGrouping, routePlaceName, tripRouteStops, pruneRoutePlan } from "@/lib/route-map";
+import { destinationBookingDays, bookingMapGrouping, routePlaceName, tripRouteStops, tripDestinationStops, insertTripDestination, removeTripDestination, moveTripDestination, reorderTripDestination, updateTripDestinationDate, pruneRoutePlan } from "@/lib/route-map";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -102,7 +105,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -176,15 +178,19 @@ export const Route = createFileRoute("/_authenticated/trips/$tripId")({
     ],
   }),
   component: TripDetail,
-  notFoundComponent: () => (
-    <p className="text-sm text-muted-foreground">
-      Reis niet gevonden.{" "}
-      <Link to="/dashboard" className="underline">
-        Terug naar overzicht
-      </Link>
-    </p>
-  ),
+  notFoundComponent: TripNotFound,
 });
+
+function TripNotFound() {
+  const { text } = useLocale();
+  return (
+    <div className="rounded-xl border bg-card p-6 text-card-foreground">
+      <h1 className="font-display text-lg font-semibold">{text("Reis niet gevonden", "Trip not found")}</h1>
+      <p className="mt-2 text-sm text-muted-foreground">{text("Ga terug naar het overzicht om een beschikbare reis te openen.", "Return to your overview to open an available trip.")}</p>
+      <Button asChild variant="outline" className="mt-4 min-h-11"><Link to="/dashboard">{text("Alle reizen", "All trips")}</Link></Button>
+    </div>
+  );
+}
 
 function TripDetail() {
   const { locale, text } = useLocale();
@@ -195,6 +201,12 @@ function TripDetail() {
   const found = state.trips.find((t) => t.id === tripId);
   if (!found) throw notFound();
   const trip = found;
+  const displayDate = (value: string) => {
+    const date = new Date(`${value}T12:00:00`);
+    return Number.isFinite(date.getTime())
+      ? new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric" }).format(date)
+      : value;
+  };
   const hotelGaps = findTripHotelGaps(trip);
   const missingHotelNights = hotelGaps.reduce((sum, gap) => sum + gap.nights, 0);
   const tripIsCurrent = tripStatus(trip) === "current";
@@ -343,6 +355,8 @@ function TripDetail() {
     paidBy: ownerParticipant.id,
     billable: false,
   });
+  const expenseEditor = useRef<HTMLDivElement>(null);
+  const expenseTitle = useRef<HTMLInputElement>(null);
   const [editingExpenseId, setEditingExpenseId] = useState<string>();
   const [fuelTravelItemId, setFuelTravelItemId] = useState<string>();
   const [expenseSaving, setExpenseSaving] = useState(false);
@@ -365,10 +379,16 @@ function TripDetail() {
   const [pendingStopNights, setPendingStopNights] = useState("1");
   const [pendingStopIndex, setPendingStopIndex] = useState(trip.stops.length);
   const [pendingStopSaving, setPendingStopSaving] = useState(false);
-  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [dateStop, setDateStop] = useState<Trip["stops"][number]>();
+  const [cover, setCover] = useState<{ tripId: string; url: string | null }>();
+  const coverUrl = cover?.tripId === trip.id ? cover.url : undefined;
+  const setCoverUrl = useCallback((url: string | null) => setCover({ tripId: trip.id, url }), [trip.id]);
   const [activeStopId, setActiveStopId] = useState<string>();
   const routeStops = tripRouteStops(trip);
-  const visibleStops = showAllStops ? routeStops : routeStops.slice(0, 4);
+  const knownBookingDays = destinationBookingDays(trip);
+  const bookingDates = new globalThis.Map([...knownBookingDays].flatMap(([id, days]) => days.length === 1 ? [[id, days[0]] as const] : []));
+  const destinationStops = tripDestinationStops(trip);
+  const visibleStops = showAllStops ? destinationStops : destinationStops.slice(0, 4);
   const visibleExpenses = trip.expenses.filter(
     (expense) =>
       (expenseCategoryFilter === "all" || expense.category === expenseCategoryFilter) &&
@@ -493,6 +513,7 @@ function TripDetail() {
   }
 
   async function addExpense() {
+    if (!moneyEditable || expenseSaving) return;
     if (!draft.title.trim() || !Number.isFinite(draft.amount) || draft.amount <= 0) {
       toast.error("Vul een omschrijving en bedrag groter dan nul in.");
       return;
@@ -500,37 +521,9 @@ function TripDetail() {
     setExpenseSaving(true);
     try {
       const expenseId = editingExpenseId ?? uid();
-      await saveTripNow(trip.id, (t) => ({
-        ...t,
-        expenses: editingExpenseId
-          ? t.expenses.map((expense) =>
-              expense.id === editingExpenseId
-                ? { ...draft, billable: canMarkBillable && draft.billable, id: editingExpenseId }
-                : expense,
-            )
-          : [
-              ...t.expenses,
-              { ...draft, billable: canMarkBillable && draft.billable, id: expenseId },
-            ],
-        travelItems: linkFuelExpense(
-          editingExpenseId
-            ? (t.travelItems ?? []).map((travelItem) =>
-                travelItem.expenseId === editingExpenseId
-                  ? {
-                      ...travelItem,
-                      title: draft.title.trim(),
-                      date: draft.date,
-                      amount: draft.amount,
-                      currency: draft.currency,
-                    }
-                  : travelItem,
-              )
-            : (t.travelItems ?? []),
-          expenseId,
-          fuelTravelItemId,
-        ),
-      }));
-      setDraft({ ...draft, title: "", amount: 0, notes: undefined, splitWith: undefined });
+      await saveTripNow(trip.id, (current) => saveExpenseDraft(current, draft, expenseId,
+        Boolean(editingExpenseId), canMarkBillable, fuelTravelItemId));
+      setDraft({ ...draft, title: "", amount: 0, notes: undefined, splitWith: undefined, receiptPath: undefined, receiptName: undefined });
       setEditingExpenseId(undefined);
       setFuelTravelItemId(undefined);
       toast.success(
@@ -650,17 +643,12 @@ function TripDetail() {
     const stopId = uid();
     setPendingStopSaving(true);
     try {
-      await saveTripNow(trip.id, (current) => {
-        const stops = [...current.stops];
-        const insertAt = Math.max(0, Math.min(position ?? stops.length, stops.length));
-        stops.splice(insertAt, 0, {
+      await saveTripNow(trip.id, (current) => insertTripDestination(current, {
           id: stopId,
           ...location,
           nights: overnight ? nights : 0,
           ...(overnight ? { arrive } : {}),
-        });
-        return pruneRoutePlan({ ...current, stops });
-      });
+        }, position));
       setActiveStopId(stopId);
       setPendingStop(undefined);
       toast.success(text(`${location.name} toegevoegd.`, `${location.name} added.`));
@@ -677,6 +665,12 @@ function TripDetail() {
     }
   }
 
+  async function saveDestinationDate(date: string) {
+    if (!editable || !dateStop) throw new Error("DESTINATION_DATE_FORBIDDEN");
+    await saveTripNow(trip.id, current => updateTripDestinationDate(current, dateStop.id, date, dateStop.arrive));
+    toast.success(text("Bestemmingsdatum opgeslagen.", "Destination date saved."));
+  }
+
   async function removeStop(stopId: string) {
     if (
       !window.confirm(
@@ -688,10 +682,7 @@ function TripDetail() {
     )
       return;
     try {
-      await saveTripNow(trip.id, (current) => pruneRoutePlan({
-        ...current,
-        stops: current.stops.filter((stop) => stop.id !== stopId),
-      }));
+      await saveTripNow(trip.id, (current) => removeTripDestination(current, stopId));
       if (activeStopId === stopId) setActiveStopId(undefined);
       toast.success(text("Bestemming verwijderd.", "Destination deleted."));
     } catch (error) {
@@ -704,16 +695,18 @@ function TripDetail() {
   }
 
   async function moveStop(stopId: string, direction: -1 | 1) {
+    if (!editable) return;
     try {
-      await saveTripNow(trip.id, (current) => {
-        const from = current.stops.findIndex((stop) => stop.id === stopId);
-        const to = from + direction;
-        if (from < 0 || to < 0 || to >= current.stops.length) return current;
-        const stops = [...current.stops];
-        const [moved] = stops.splice(from, 1);
-        stops.splice(to, 0, moved!);
-        return pruneRoutePlan({ ...current, stops });
-      });
+      await saveTripNow(trip.id, (current) => moveTripDestination(current, stopId, direction));
+    } catch {
+      toast.error(text("De volgorde kon niet worden aangepast.", "The order could not be changed."));
+    }
+  }
+
+  async function reorderStop(stopId: string, targetId: string) {
+    if (!editable) return;
+    try {
+      await saveTripNow(trip.id, current => reorderTripDestination(current, stopId, targetId));
     } catch {
       toast.error(text("De volgorde kon niet worden aangepast.", "The order could not be changed."));
     }
@@ -899,23 +892,16 @@ function TripDetail() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <Link to="/dashboard" className="text-xs text-muted-foreground hover:underline">
-            ← {text("Alle reizen", "All trips")}
-          </Link>
-          <h1 className="break-anywhere font-display text-2xl font-semibold">{trip.name}</h1>
-          <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <Badge variant="secondary">{tripStatusLabel(tripStatus(trip), text)}</Badge>
-            {trip.start} → {trip.end} · {trip.stops.length}{" "}
-            {text(
-              trip.stops.length === 1 ? "bestemming" : "bestemmingen",
-              trip.stops.length === 1 ? "destination" : "destinations",
-            )}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+    <div className="space-y-4">
+      <TripOverviewHeader trip={trip} base={base} rates={rates} text={text}
+        coverUrl={coverUrl} onCoverUrlChange={setCoverUrl}
+        dateLabel={`${displayDate(trip.start)} – ${displayDate(trip.end)}`}
+        spent={spent} estimatedFuel={estimatedFuel} billable={billable} canMarkBillable={canMarkBillable}
+        missingNights={missingHotelNights} onInsights={() => setActiveTab("insights")}
+        onExpenses={() => setActiveTab("expenses")} onAccommodation={() => {
+          setActiveTab("discover");
+          window.setTimeout(() => document.getElementById("hotelcontrole")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }), 50);
+        }} actions={<>
           <Button asChild variant="outline">
             <Link to="/journal" search={{ trip: trip.id }}>
               <BookHeart className="size-4" /> {text("Dagboek", "Journal")}
@@ -925,53 +911,11 @@ function TripDetail() {
             <Download className="size-4" /> {text("Offline", "Offline")}
           </Button>
           <TripCalendarExport trip={trip} paid={state.plan === "pro" || state.plan === "agency"} />
-        </div>
-      </div>
-
-      {tripStatus(trip) === "upcoming" && (
-        <Card className="surface">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">
-              {text("Aftellen tot vertrek", "Countdown to departure")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Countdown date={trip.start} />
-          </CardContent>
-        </Card>
-      )}
-
-      {missingHotelNights > 0 && (
-        <button type="button" onClick={() => {
-          setActiveTab("discover");
-          window.setTimeout(() => document.getElementById("hotelcontrole")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-        }} className="flex w-full items-center justify-between gap-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-left transition-colors hover:bg-amber-500/15">
-          <span><strong className="block text-amber-800 dark:text-amber-200">{text(`${missingHotelNights} ${missingHotelNights === 1 ? "nacht mist" : "nachten missen"} een verblijf`, `${missingHotelNights} ${missingHotelNights === 1 ? "night has" : "nights have"} no accommodation`)}</strong><span className="mt-1 block text-sm text-muted-foreground">{text("Controleer de nachten onder Ontdekken en zoek daar direct een passend verblijf.","Review the nights under Discover and search for suitable accommodation there.")}</span></span>
-          <Compass className="size-5 shrink-0 text-amber-700 dark:text-amber-300" />
-        </button>
-      )}
-
-      <div
-        className={`grid gap-4 ${canMarkBillable || estimatedFuel > 0 ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}
-      >
-        <Stat label={text("Uitgegeven", "Spent")} value={formatMoney(spent, base)} />
-        <Stat label="Budget" value={formatMoney(trip.budget, base)} />
-        {estimatedFuel > 0 && (
-          <Stat
-            label={text("Brandstofprognose", "Fuel estimate")}
-            value={formatMoney(estimatedFuel, base)}
-          />
-        )}
-        {canMarkBillable && (
-          <Stat label={text("Declarabel", "Billable")} value={formatMoney(billable, base)} />
-        )}
-      </div>
-      <Progress value={trip.budget ? Math.min(100, (spent / trip.budget) * 100) : 0} />
-      <TripInsightsSummary trip={trip} base={base} rates={rates} text={text} onOpen={() => setActiveTab("insights")} />
+        </>}/>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <div className="sticky top-2 z-20 rounded-xl border bg-background/95 p-1 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/85">
-          <TabsList className="grid h-auto w-full grid-cols-5 bg-transparent p-0">
+        <div className="trip-workspace-tabs sticky top-2 z-20 border-b border-border/70 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+          <TabsList aria-label={text("Reisonderdelen", "Trip sections")} className="grid h-auto w-full grid-cols-5 bg-transparent p-0">
             <TabsTrigger value="today" className="min-w-0 flex-col gap-1 px-1 py-2 sm:flex-row sm:px-3"><CalendarDays className="size-4"/><span className="text-[11px] sm:text-sm">{text("Vandaag","Today")}</span></TabsTrigger>
             <TabsTrigger value="route" className="min-w-0 flex-col gap-1 px-1 py-2 sm:flex-row sm:px-3"><Map className="size-4"/><span className="text-[11px] sm:text-sm">{text("Route","Route")}</span></TabsTrigger>
             <TabsTrigger value="plan" className="min-w-0 flex-col gap-1 px-1 py-2 sm:flex-row sm:px-3"><RouteIcon className="size-4"/><span className="text-[11px] sm:text-sm">{text("Schema","Schedule")}</span></TabsTrigger>
@@ -1044,7 +988,7 @@ function TripDetail() {
 
         <TabsContent value="settings" className="space-y-4">
           <Tabs defaultValue="general">
-            <TabsList className="h-auto flex-wrap justify-start">
+            <TabsList aria-label={text("Reisinstellingen", "Trip settings")} className="h-auto flex-wrap justify-start gap-1 [&_button]:min-h-10">
               <TabsTrigger value="general">{text("Algemeen", "General")}</TabsTrigger>
               <TabsTrigger value="exports">{text("Export en import", "Export and import")}</TabsTrigger>
               <TabsTrigger value="notifications">{text("Meldingen", "Notifications")}</TabsTrigger>
@@ -1064,7 +1008,7 @@ function TripDetail() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <form className="grid gap-4 sm:grid-cols-2" onSubmit={saveTripSettings}>
+                    <form className="grid gap-x-4 gap-y-5 sm:grid-cols-2 [&>label]:block [&_input]:min-h-11 [&_select]:min-h-11 sm:[&_input]:min-h-9 sm:[&_select]:min-h-10" onSubmit={saveTripSettings}>
                       <label className="space-y-1.5 text-sm sm:col-span-2">
                         <span className="text-muted-foreground">
                           {text("Reisnaam", "Trip name")}
@@ -1084,7 +1028,7 @@ function TripDetail() {
                       </label>
                       <label className="space-y-1.5 text-sm sm:col-span-2">
                         <span className="text-muted-foreground">
-                          {text("Reisomschrijving", "Trip description")}
+                          {text("Reisomschrijving (optioneel)", "Trip description (optional)")}
                         </span>
                         <Textarea
                           value={settings.description}
@@ -1178,7 +1122,7 @@ function TripDetail() {
                       </label>
                       <div className="mt-2 flex items-end sm:col-span-2">
                         <div className="flex flex-wrap gap-2">
-                          <Button type="submit" disabled={!settingsEditable || settingsSaving}>
+                          <Button type="submit" className="min-h-11 sm:min-h-9" aria-busy={settingsSaving} disabled={!settingsEditable || settingsSaving}>
                             {settingsSaving
                               ? text("Opslaan…", "Saving…")
                               : text("Wijzigingen opslaan", "Save changes")}
@@ -1563,25 +1507,21 @@ function TripDetail() {
             </div>
             <aside className="space-y-4 xl:sticky xl:top-24">
               <Card className="surface">
-                <CardHeader className="pb-2">
+                <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
                   <CardTitle className="text-sm">
                     {text("Bestemming toevoegen", "Add destination")}
                   </CardTitle>
+                  <FavoritePlaces compact stops={trip.stops} editable={editable} text={text}
+                    onAdd={(place) => addStop(place, false, "", 0)} />
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <PlaceSearch disabled={!editable} onPick={(location) => {
+                  <PlaceSearch compact disabled={!editable} onPick={(location) => {
                     setPendingStop(location);
                     setPendingStopOvernight(false);
                     setPendingStopArrival("");
                     setPendingStopNights("1");
                     setPendingStopIndex(trip.stops.length);
                   }} />
-                  <FavoritePlaces
-                    stops={trip.stops}
-                    editable={editable}
-                    text={text}
-                    onAdd={(place) => addStop(place, false, "", 0)}
-                  />
                   <Dialog open={Boolean(pendingStop)} onOpenChange={(open) => { if (!open && !pendingStopSaving) setPendingStop(undefined); }}>
                     <DialogContent className="sm:max-w-lg">
                       <DialogHeader><DialogTitle>{pendingStop?.name} {text("toevoegen", "add")}</DialogTitle></DialogHeader>
@@ -1613,47 +1553,33 @@ function TripDetail() {
                         : ""}
                     </p>
                   )}
-                  <ul className="space-y-2">
+                  {editable && destinationStops.length > 1 && <p className="text-xs text-muted-foreground sm:hidden">
+                    {text("Sleep via het handvat om de volgorde te wijzigen, of gebruik de pijltjes.", "Drag the handle to reorder, or use the arrows.")}
+                  </p>}
+                  {dateStop && <DestinationDateEditor key={dateStop.id} stop={dateStop} bookingDays={knownBookingDays.get(dateStop.id)} suggestedDate={bookingDates.get(dateStop.id)}
+                    onSave={saveDestinationDate} onSaveLocation={async (date,location)=>{if(!editable||!dateStop)throw Error("DESTINATION_DATE_FORBIDDEN");await saveTripNow(trip.id,current=>updateDestinationDetails(current,dateStop,date,location));}} onClose={() => setDateStop(undefined)} />}
+                  <DestinationList order={visibleStops.map(stop => stop.id)} onReorder={editable ? (source, target) => { void reorderStop(source, target); } : undefined}>
                     {visibleStops.map((s) => {
-                      const stopIndex = trip.stops.findIndex((stop) => stop.id === s.id);
+                      const stopIndex = destinationStops.findIndex((stop) => stop.id === s.id);
                       return (
                         <li
                           key={s.id}
-                          className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors ${
+                          data-destination-id={s.id}
+                          className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1 rounded-lg border px-3 py-2 text-sm transition-colors data-[dragging=true]:relative data-[dragging=true]:z-10 data-[dragging=true]:bg-background data-[dragging=true]:shadow-lg data-[dragging=true]:ring-2 data-[dragging=true]:ring-primary/40 data-[drop-target=true]:border-primary data-[drop-target=true]:bg-primary/10 ${
                             activeStopId === s.id
                               ? "border-primary bg-primary/10"
                               : "border-transparent bg-muted/60 hover:bg-muted"
                           }`}
                           onClick={() => setActiveStopId(s.id)}
                         >
-                          <button type="button" className="min-w-0 flex-1 text-left">
-                            <span className="mr-2 text-muted-foreground">{routeStops.findIndex(stop => stop.id === s.id) + 1}.</span>
-                            {routePlaceName(s)}
-                            {s.arrive && <span className="ml-2 text-xs text-muted-foreground">{s.arrive}</span>}
-                            <span className="ml-2 text-xs text-muted-foreground">
-                              {localizeCountry(s.country, locale)}
-                            </span>
-                          </button>
-                          {editable && (
-                            <div className="flex shrink-0 items-center">
-                            <button type="button" disabled={stopIndex === 0} aria-label={text("Bestemming omhoog", "Move destination up")} onClick={(event) => { event.stopPropagation(); void moveStop(s.id, -1); }}><ArrowUp className="size-4 text-muted-foreground disabled:opacity-40" /></button>
-                            <button type="button" disabled={stopIndex === trip.stops.length - 1} aria-label={text("Bestemming omlaag", "Move destination down")} onClick={(event) => { event.stopPropagation(); void moveStop(s.id, 1); }}><ArrowDown className="size-4 text-muted-foreground disabled:opacity-40" /></button>
-                            <button
-                              type="button"
-                              aria-label={text("Verwijder bestemming", "Delete destination")}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void removeStop(s.id);
-                              }}
-                            >
-                              <Trash2 className="size-4 text-muted-foreground hover:text-destructive" />
-                            </button>
-                            </div>
-                          )}
+                          <DestinationSummary stop={s} index={stopIndex} bookingDays={knownBookingDays.get(s.id)} suggestedDate={bookingDates.get(s.id)} onSelect={() => setActiveStopId(s.id)}
+                            onEditDate={editable ? () => setDateStop(s) : undefined} />
+                          {editable && <DestinationControls name={routePlaceName(s)} index={stopIndex} total={destinationStops.length}
+                            onMove={direction => { void moveStop(s.id, direction); }} onRemove={() => { void removeStop(s.id); }} />}
                         </li>
                       );
                     })}
-                  </ul>
+                  </DestinationList>
                   {routeStops.length > 4 && (
                     <Button
                       type="button"
@@ -1781,9 +1707,9 @@ function TripDetail() {
         )}
 
         <TabsContent value="expenses" className="space-y-4">
-          <Card className="surface">
+          <Card ref={expenseEditor} className="surface scroll-mt-24">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">
+              <CardTitle className="text-sm" aria-live="polite">
                 {editingExpenseId
                   ? text("Uitgave wijzigen", "Edit expense")
                   : text("Uitgave boeken (elke valuta)", "Add expense (any currency)")}
@@ -1798,6 +1724,8 @@ function TripDetail() {
                   onChange={(e) => setDraft({ ...draft, date: e.target.value })}
                 />
                 <Input
+                  ref={expenseTitle}
+                  aria-label={text("Omschrijving uitgave", "Expense description")}
                   className="md:col-span-2"
                   value={draft.title}
                   disabled={!moneyEditable}
@@ -2110,6 +2038,8 @@ function TripDetail() {
                               </label>
                             )}
                             <button
+                              type="button"
+                              disabled={expenseSaving}
                               aria-label={text("Wijzig uitgave", "Edit expense")}
                               className="p-1 text-muted-foreground hover:text-foreground"
                               onClick={() => {
@@ -2118,6 +2048,9 @@ function TripDetail() {
                                   fuelTravelItemIdForExpense(trip.travelItems ?? [], e.id),
                                 );
                                 setDraft(normalizeExpenseParticipants(e, financialParticipants));
+                                expenseTitle.current?.focus({ preventScroll: true });
+                                expenseEditor.current?.scrollIntoView({ block: "start", behavior:
+                                  window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
                               }}
                             >
                               <Pencil className="size-4" />
@@ -2162,15 +2095,6 @@ function TripDetail() {
   );
 }
 
-function tripStatusLabel(
-  status: ReturnType<typeof tripStatus>,
-  text: (nl: string, en: string) => string,
-) {
-  if (status === "current") return text("Huidig", "Current");
-  if (status === "upcoming") return text("Aankomend", "Upcoming");
-  return text("Gearchiveerd", "Archived");
-}
-
 function expenseCategoryLabel(
   id: string,
   fallback: string,
@@ -2185,17 +2109,6 @@ function expenseCategoryLabel(
     other: "Other",
   };
   return text(fallback, labels[id] ?? fallback);
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <Card className="surface">
-      <CardContent className="p-4">
-        <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-        <p className="font-display text-2xl font-semibold">{value}</p>
-      </CardContent>
-    </Card>
-  );
 }
 
 function ToggleSetting({

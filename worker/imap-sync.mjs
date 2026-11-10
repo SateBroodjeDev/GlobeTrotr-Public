@@ -1,3 +1,4 @@
+import { publicSmtpConnection } from "./public-network.mjs";
 import { ImapFlow } from "imapflow";
 import { processMailCleanup } from "./corporate-mail-retention.mjs";
 import { simpleParser } from "mailparser";
@@ -15,6 +16,7 @@ import {
 } from "./booking-mail-policy.mjs";
 import { configuredMailTls, configuredMailboxImapHost } from "./mail-tls.mjs";
 import { importMailboxReady, corporateJunkFolders, corporateFoldersSupported, pendingCorporateFolderImports } from "./staff-mail-policy.mjs";
+import { createImapSyncHealth, createImapHealthReporter, imapProcessIdentity } from "./imap-sync-health.mjs";
 
 const env = process.env,
   supabaseUrl = required("SUPABASE_URL").replace(/\/$/, ""),
@@ -26,6 +28,9 @@ const serviceAuthHeaders = {
 const interval = bounded(env.IMAP_SYNC_INTERVAL_MS, 60_000, 15_000, 900_000),
   lookback = bounded(env.IMAP_INITIAL_LOOKBACK_DAYS, 14, 1, 90);
 const bookingMailEnabled = env.TRIP_BOOKING_MAIL_ENABLED === "true";
+const syncHealth = createImapSyncHealth({ intervalMs: interval, identity: await imapProcessIdentity() });
+const reportSyncHealth = createImapHealthReporter({ log });
+const publishSyncHealth = () => reportSyncHealth(syncHealth.snapshot());
 let stopping = false;
 process.on("SIGTERM", () => {
   stopping = true;
@@ -74,9 +79,11 @@ function decrypt(value) {
   const raw = required("MAILBOX_CREDENTIALS_KEY");
   const key = Buffer.from(raw, "base64");
   const [version, iv, tag, encrypted] = String(value).split(".");
+  if (!/^v1\.[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]+$/.test(String(value))) throw new Error("ENCRYPTED_SECRET_INVALID");
+  if (Buffer.from(tag, "base64url").toString("base64url") !== tag || Buffer.from(encrypted, "base64url").toString("base64url") !== encrypted) throw new Error("ENCRYPTED_SECRET_INVALID");
   if (key.length !== 32 || version !== "v1" || !iv || !tag || !encrypted)
     throw new Error("MAILBOX_CREDENTIAL_INVALID");
-  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "base64url"));
+  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "base64url"), { authTagLength: 16 });
   decipher.setAuthTag(Buffer.from(tag, "base64url"));
   return Buffer.concat([
     decipher.update(Buffer.from(encrypted, "base64url")),
@@ -93,12 +100,10 @@ async function updateSyncState(boxes, changes) {
   });
 }
 async function sync() {
-  const managedSetup = env.STAFF_AUTOMATION_ENABLED === "true" || env.STAFF_MAIL_SETUP_ENABLED === "true";
   const mailboxes = (await rest(
-    "corporate_mailboxes?active=eq.true&select=id,address,display_name,owner_user_id,last_synced_at,hosting_mode,imap_host,imap_port,imap_secure,imap_username,imap_password_ciphertext" +
-      (managedSetup ? ",provisioning_create_only,managed_import_credential_id,provisioning_status" : ""),
+    "corporate_mailboxes?active=eq.true&select=id,address,display_name,owner_user_id,last_synced_at,hosting_mode,imap_host,imap_port,imap_secure,imap_username,imap_password_ciphertext,provisioning_create_only,managed_import_credential_id,provisioning_status,provisioning_app_password",
   )).filter(importMailboxReady);
-  if (!mailboxes.length) return;
+  if (!mailboxes.length) return { succeeded: 0, failed: 0 };
   const corporateJunkEnabled = await corporateFoldersSupported(rest);
   const bookingAddresses = await rest(
     "trip_booking_mail_addresses?select=id,address,trip_uuid,mailbox_id,allowed_senders,retention_days,active",
@@ -134,6 +139,10 @@ async function sync() {
           { hosting_mode: connection.hostingMode, imap_host: connection.host },
           env.IMAP_HOST,
         ) || required("IMAP_HOST");
+      // Browser-configured external targets use the checked address directly;
+      // trusted self-hosted/fallback configuration keeps its existing private route.
+      const externalTarget = connection.hostingMode === "external";
+      const outbound = externalTarget ? await publicSmtpConnection(host) : { host, tls: {} };
       phase = "sync_state";
       await updateSyncState(connection.boxes, {
         sync_status: "syncing",
@@ -141,12 +150,12 @@ async function sync() {
         last_sync_error_code: null,
       });
       client = new ImapFlow({
-        host,
+        host: outbound.host,
         port: connection.port,
         secure: connection.secure,
         auth: { user: connection.user || required("IMAP_USER"), pass: connection.password() },
         logger: false,
-        tls: configuredMailTls(
+        tls: externalTarget ? { ...outbound.tls, rejectUnauthorized: true } : configuredMailTls(
           host,
           env.IMAP_HOST,
           env.IMAP_TLS_SERVERNAME,
@@ -511,14 +520,19 @@ async function sync() {
     }
   }
   log(failed ? "error" : "info", "imap.synced", { succeeded, failed });
+  return { succeeded, failed };
 }
 while (!stopping) {
+  syncHealth.start();
+  await publishSyncHealth();
   try {
-    await sync();
+    syncHealth.complete(await sync());
   } catch (error) {
+    syncHealth.fail();
     log("error", "imap.sync_failed", {
       errorCode: safeImapErrorCode(error),
     });
   }
+  await publishSyncHealth();
   await new Promise((resolve) => setTimeout(resolve, interval));
 }

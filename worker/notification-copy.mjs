@@ -35,12 +35,12 @@ export function notificationCopy(job) {
       body = english ? parts[4] || body : parts[3] || body;
       severity = parts[1] === "critical" ? "critical" : null;
       actionUrl =
-        parts[0] === "status" ? "https://globetrotr.nl/status" : "https://globetrotr.nl/updates";
+        parts[0] === "status" ? "https://status.globetrotr.nl/" : "https://globetrotr.nl/updates";
     } else {
       severity = payload.severity === "critical" ? "critical" : null;
       actionUrl ??=
         payload.announcementType === "status"
-          ? "https://globetrotr.nl/status"
+          ? "https://status.globetrotr.nl/"
           : "https://globetrotr.nl/updates";
     }
   } else if (job.templateKey === "account") {

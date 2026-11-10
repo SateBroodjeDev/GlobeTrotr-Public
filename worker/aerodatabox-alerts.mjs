@@ -57,7 +57,11 @@ export function extractAlertBalance(payload) {
     payload?.data?.remainingCredits,
     payload?.data?.creditsRemaining,
   ];
-  const value = values.find((candidate) => Number.isFinite(Number(candidate)));
+  // null, booleans and empty strings must not manufacture a zero-credit alarm.
+  const value = values.find((candidate) =>
+    (typeof candidate === "number" || typeof candidate === "string" && candidate.trim() !== "") &&
+    Number.isFinite(Number(candidate)),
+  );
   return value === undefined ? null : Math.max(0, Math.floor(Number(value)));
 }
 
@@ -105,6 +109,7 @@ export async function fetchAlertBalance(env) {
   const quotaHeader = [...response.headers.entries()].find(([name, value]) =>
     name.toLowerCase().startsWith("x-ratelimit-") &&
     name.toLowerCase().endsWith("-remaining") &&
+    value.trim() !== "" &&
     Number.isFinite(Number(value)),
   );
   return quotaHeader ? Math.max(0, Math.floor(Number(quotaHeader[1]))) : null;

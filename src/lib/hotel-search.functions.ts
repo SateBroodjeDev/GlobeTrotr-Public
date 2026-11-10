@@ -4,6 +4,7 @@ import { requireTripManagementAccess } from "@/lib/trip-management-access.server
 import {
   bookingHotelsRequest,
   parseBookingHotels,
+  resolveHotelSearch,
   type BookingHotelSearchInput,
 } from "@/lib/booking-hotels";
 import { rapidApiQuota, recordBookingProvider } from "@/lib/booking-provider-health.server";
@@ -23,6 +24,9 @@ export type HotelSearchResult = {
   lat: number;
   lon: number;
   distanceKm: number;
+  city?: string;
+  country?: string;
+  addressLine?: string;
   website?: string;
   osmUrl: string;
   stars?: string;
@@ -33,6 +37,7 @@ export type HotelSearchResult = {
   reviewScore?: number;
   reviewCount?: number;
   photoUrl?: string;
+  availability?: "available" | "unknown";
 };
 function safeUrl(value: unknown) {
   if (typeof value !== "string" || value.length > 2048) return undefined;
@@ -125,6 +130,9 @@ async function openStreetMapSearch(lat: number, lon: number): Promise<HotelSearc
         name: String(tags.name ?? "")
           .trim()
           .slice(0, 160),
+        city: String(tags["addr:city"] ?? tags["addr:town"] ?? "").trim().slice(0, 160) || undefined,
+        country: String(tags["addr:country"] ?? "").trim().slice(0, 160) || undefined,
+        addressLine: [tags["addr:street"], tags["addr:housenumber"], tags["addr:postcode"]].filter(value => typeof value === "string").join(" ").slice(0, 240) || undefined,
         kind: String(tags.tourism ?? "hotel").slice(0, 40),
         lat: itemLat,
         lon: itemLon,
@@ -213,31 +221,10 @@ export const searchNearbyHotels = createServerFn({ method: "POST" })
     const cached = cache.get(key);
     if (cached && cached.expires > now)
       return { results: cached.results, cached: true, provider: cached.provider, bookingUnavailable: cached.bookingUnavailable, bookingStatus: cached.bookingStatus };
-    let results: HotelSearchResult[] | undefined,
-      provider: "booking" | "openstreetmap" = "booking",
-      bookingUnavailable = false,
-      bookingStatus: "ok" | "no_results" | "timeout" | "unavailable" = "ok";
-    try {
-      results = await bookingSearch({
-        lat: data.lat,
-        lon: data.lon,
-        arrivalDate: data.arrivalDate,
-        departureDate: data.departureDate,
-        adults,
-        rooms,
-        currency,
-        language: data.language ?? "nl",
-      });
-    } catch (error) {
-      if (error instanceof Error && ["BOOKING_HOTEL_AUTH", "BOOKING_HOTEL_QUOTA", "BOOKING_HOTEL_INVALID_INPUT"].includes(error.message)) throw error;
-      bookingUnavailable = true;
-      bookingStatus = error instanceof Error && error.message === "BOOKING_HOTEL_TIMEOUT" ? "timeout" : "unavailable";
-    }
-    if (!results?.length) {
-      if (!bookingUnavailable) bookingStatus = "no_results";
-      provider = "openstreetmap";
-      results = await openStreetMapSearch(data.lat, data.lon);
-    }
+    const { results, provider, bookingUnavailable, bookingStatus } = await resolveHotelSearch(
+      () => bookingSearch({ lat: data.lat, lon: data.lon, arrivalDate: data.arrivalDate,
+        departureDate: data.departureDate, adults, rooms, currency, language: data.language ?? "nl" }),
+      () => openStreetMapSearch(data.lat, data.lon));
     cache.set(key, { expires: now + 10 * 60_000, results, provider, bookingUnavailable, bookingStatus });
     return { results, cached: false, provider, bookingUnavailable, bookingStatus };
   });

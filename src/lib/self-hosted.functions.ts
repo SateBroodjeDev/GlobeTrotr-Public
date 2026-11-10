@@ -139,27 +139,11 @@ export const revokeMyInstallation = createServerFn({ method: "POST" })
   .validator((x: { installationId: string }) => x)
   .handler(async ({ data, context }) => {
     if (!UUID.test(data.installationId)) throw new Error("INVALID_INSTALLATION");
-    const db = await database(),
-      installation = await db
-        .from("self_hosted_installations")
-        .select(
-          "id,license_id,self_hosted_licenses!inner(self_hosted_customers!inner(owner_user_id))",
-        )
-        .eq("id", data.installationId)
-        .eq("self_hosted_licenses.self_hosted_customers.owner_user_id", context.userId)
-        .is("revoked_at", null)
-        .maybeSingle();
-    if (!installation.data) throw new Error("INSTALLATION_NOT_FOUND");
-    const now = new Date().toISOString();
-    await db
-      .from("self_hosted_installations")
-      .update({ revoked_at: now, updated_at: now })
-      .eq("id", data.installationId);
-    await db.from("self_hosted_license_events").insert({
-      license_id: installation.data.license_id,
-      installation_id: data.installationId,
-      event_type: "installation.revoked_by_owner",
+    const db = await database();
+    const result = await db.rpc("revoke_self_hosted_installation", {
+      p_id: data.installationId, p_actor: context.userId, p_key: null, p_secret_hash: null,
     });
+    if (result.error || result.data !== true) throw new Error("INSTALLATION_REVOKE_FAILED");
     return { ok: true };
   });
 export const getSelfHostedAdmin = createServerFn({ method: "GET" })

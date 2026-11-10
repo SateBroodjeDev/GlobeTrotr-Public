@@ -25,7 +25,7 @@ export async function licenseByRawKey(raw: string) {
     .select("*,self_hosted_customers(legal_name)")
     .eq("id", secret.data.license_id)
     .maybeSingle();
-  return license.data ?? null;
+  return license.error ? null : license.data ?? null;
 }
 export async function installationByCredentials(rawSecret: string, installationKey: string) {
   if (!rawSecret.startsWith("gti_") || !installationKey.startsWith("inst_")) return null;
@@ -37,13 +37,13 @@ export async function installationByCredentials(rawSecret: string, installationK
     .eq("secret_hash", sha256(rawSecret))
     .is("revoked_at", null)
     .maybeSingle();
-  if (!installation.data) return null;
+  if (installation.error || !installation.data) return null;
   const license = await db
     .from("self_hosted_licenses")
     .select("*,self_hosted_customers(legal_name)")
     .eq("id", installation.data.license_id)
     .maybeSingle();
-  if (!license.data) return null;
+  if (license.error || !license.data) return null;
   return { installation: installation.data, license: license.data };
 }
 export async function issueLease(license: any, installation: any) {
@@ -65,14 +65,11 @@ export async function issueLease(license: any, installation: any) {
   };
   const lease = signedLease(payload),
     db = supabaseAdmin as any;
-  await db
-    .from("self_hosted_installations")
-    .update({
-      last_seen_at: new Date().toISOString(),
-      lease_expires_at: expiresAt.toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", installation.id);
+  const recorded = await db.rpc("record_self_hosted_lease", {
+    p_id: installation.id, p_secret_hash: installation.secret_hash,
+    p_expires: expiresAt.toISOString(), p_version: installation.version,
+  });
+  if (recorded.error || recorded.data !== true) throw new Error("LICENSE_LEASE_UNCONFIRMED");
   return {
     lease,
     expiresAt: expiresAt.toISOString(),

@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { ManualLocationEditor } from "@/components/ManualLocationEditor";
+import type { GeoResult } from "@/lib/services";
 import {
   createHotelGapBooking,
   findTripHotelGaps,
@@ -44,6 +46,8 @@ export function HotelGapFinder({ trip, editable, save, text }: Props) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState<string>();
   const [bookingResult, setBookingResult] = useState<HotelSearchResult>();
+  const [reviewedLocation, setReviewedLocation] = useState<{id:string;value:GeoResult}>();
+  const [reviewLocation, setReviewLocation] = useState(false);
   const [bookingReference, setBookingReference] = useState("");
   const [adults, setAdults] = useState<number | "">("");
   const [rooms, setRooms] = useState<number | "">("");
@@ -246,7 +250,7 @@ export function HotelGapFinder({ trip, editable, save, text }: Props) {
         name: bookingResult.name,
         startDate: gap.startDate,
         endDate: gap.endDate,
-        location: { name: gap.stopName, country: gap.country, lat: gap.lat, lon: gap.lon },
+        location: reviewedLocation?.id === bookingResult.id ? reviewedLocation.value : { name: bookingResult.name, city: bookingResult.city || gap.stopName, country: bookingResult.country || gap.country, addressLine: bookingResult.addressLine, lat: bookingResult.lat, lon: bookingResult.lon },
         provider: bookingResult.provider === "booking" ? "Booking.com" : bookingResult.name,
         bookingReference,
         sourceUrl: bookingResult.website ?? bookingResult.osmUrl,
@@ -486,8 +490,8 @@ export function HotelGapFinder({ trip, editable, save, text }: Props) {
           ) : !results.length ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
               {text(
-                "Geen verblijven binnen 15 km gevonden.",
-                "No accommodation found within 15 km.",
+                "Geen passende verblijven gevonden voor deze datums, gasten en kamers. Pas je zoekopdracht aan.",
+                "No matching stays found for these dates, guests and rooms. Adjust your search.",
               )}
             </p>
           ) : (
@@ -568,6 +572,10 @@ export function HotelGapFinder({ trip, editable, save, text }: Props) {
                   {gap.country ? ` · ${gap.country}` : ""}
                 </span>
               </div>
+              {reviewLocation ? <ManualLocationEditor key={bookingResult.id} disabled={Boolean(saving)} initialLocation={reviewedLocation?.id === bookingResult.id ? reviewedLocation.value : {name:bookingResult.name,city:bookingResult.city || gap.stopName,country:bookingResult.country || gap.country,addressLine:bookingResult.addressLine,lat:bookingResult.lat,lon:bookingResult.lon}} onCancel={()=>setReviewLocation(false)} onPick={value=>{setReviewedLocation({id:bookingResult.id,value});setReviewLocation(false);}} /> : <div className="space-y-2 text-sm">
+                <p className="text-muted-foreground">{reviewedLocation?.id === bookingResult.id ? reviewedLocation.value.addressLine : bookingResult.addressLine}</p>
+                <Button type="button" variant="outline" size="sm" disabled={Boolean(saving)} onClick={()=>setReviewLocation(true)}>{text("Locatie en adres controleren", "Check location and address")}</Button>
+              </div>}
               <p className="text-sm text-muted-foreground">
                 {text(
                   "Gebruik dit alleen nadat je bij de aanbieder hebt geboekt.",
@@ -588,7 +596,7 @@ export function HotelGapFinder({ trip, editable, save, text }: Props) {
                 <Button variant="outline" onClick={() => setBookingResult(undefined)}>
                   {text("Annuleren", "Cancel")}
                 </Button>
-                <Button disabled={Boolean(saving)} onClick={() => void confirmBooking()}>
+                <Button disabled={Boolean(saving) || reviewLocation} onClick={() => void confirmBooking()}>
                   {saving && <Loader2 className="size-4 animate-spin" />}
                   {text("Als boeking toevoegen", "Add as booking")}
                 </Button>
@@ -722,6 +730,9 @@ function ResultRow({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <strong>{result.name}</strong>
+          <p className="mt-1 text-xs text-muted-foreground">{result.provider === "booking" && result.availability === "available"
+            ? text("Beschikbaar volgens de zoekrespons; controleer opnieuw bij de aanbieder.", "Available according to the search response; recheck with the provider.")
+            : text("Beschikbaarheid niet bevestigd. Controleer bij de aanbieder voor je boekt.", "Availability unconfirmed. Check with the provider before booking.")}</p>
           <p className="flex items-center gap-1 text-sm text-muted-foreground">
             <MapPin className="size-3.5" />
             {result.kind.replaceAll("_", " ")} · {result.distanceKm} km
@@ -762,7 +773,7 @@ function ResultRow({
             {result.provider === "booking" ? (
               <a href={bookingHotelPartnerUrl(result.website ?? result.osmUrl)} target="_blank" rel="sponsored noopener noreferrer">
                 <ExternalLink className="size-4" />
-                {text("Boeken", "Book")}
+                {text("Controleer en boek", "Check and book")}
               </a>
             ) : (
               <a href={result.website ?? result.osmUrl} target="_blank" rel="noopener noreferrer">

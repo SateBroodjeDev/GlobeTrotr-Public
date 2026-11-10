@@ -1,3 +1,5 @@
+import { mailReceiptClient } from "./mail-receipt-gateway.mjs";
+import { deliveryDigest, durableRelaySend, requireClaim } from "./delivery-protocol.mjs";
 import { corporateMessage } from "./corporate-message.mjs";
 import { timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
@@ -10,6 +12,8 @@ import { configuredMailTls } from "./mail-tls.mjs";
 
 const env = process.env;
 const token = required("MAIL_RELAY_TOKEN");
+const receipt = mailReceiptClient(token);
+if (env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_URL) throw new Error("RELAY_DATABASE_CREDENTIALS_FORBIDDEN");
 const port = bounded(env.MAIL_RELAY_PORT, 9092, 1, 65535);
 const smtpUser = required("SMTP_USER").toLowerCase();
 const defaultAddress = required("SMTP_FROM_ADDRESS").toLowerCase();
@@ -145,7 +149,12 @@ async function send(body, idempotencyKey) {
     : safeFrom(corporate ? body.from : undefined);
   const to = addresses(body.to);
   const cc = body.cc?.length ? addresses(body.cc) : undefined;
-  await selectedTransport.sendMail({
+  requireClaim({ claim_token: body.claimToken });
+  const kind = corporate ? "corporate" : "email", digest = deliveryDigest(body);
+  await durableRelaySend({
+    reserve: () => receipt({ action: "reserve", kind, id: body.id, claimToken: body.claimToken, digest }),
+    accept: () => receipt({ action: "accept", kind, id: body.id, digest }),
+    send: () => selectedTransport.sendMail({
     from: sender,
     replyTo: agencySmtp?.replyTo,
     to,
@@ -163,11 +172,18 @@ async function send(body, idempotencyKey) {
       ? { "X-Delivery-Message-ID": body.id }
       : { "X-GlobeTrotr-Message-ID": body.id },
     attachments: safeAttachments,
+    }),
   });
 }
 
 const server = createServer(async (request, response) => {
   response.setHeader("Cache-Control", "no-store");
+  if (request.method === "GET" && request.url === "/ready") {
+    if (!equalSecret(String(request.headers.authorization || "").replace(/^Bearer\s+/i, ""))) { response.writeHead(401).end(); return; }
+    try { await receipt({ action: "check" }); await transporter.verify(); response.writeHead(200).end('{"ready":true}'); }
+    catch { response.writeHead(503).end('{"ready":false}'); }
+    return;
+  }
   if (request.method === "GET" && request.url === "/health") {
     try {
       await transporter.verify();

@@ -15,6 +15,7 @@ export function roadRoutingMessage(error: unknown, text: (nl: string, en: string
     ROUTE_STOPS_UNAVAILABLE: ["De routepunten konden niet uit de reis worden geladen.", "The route points could not be loaded from the trip."],
     TRIP_PLANNER_REQUIRED: ["Alleen een reisplanner kan de wegroute berekenen.", "Only a trip planner can calculate the road route."],
     NO_ROAD_SEGMENTS: ["Kies eerst auto, fiets of lopen bij de etappes die je over de weg aflegt.", "First select car, bicycle or walking for the stages you travel by road."],
+    ROUTE_STAGE_MODES_CONFLICT: ["Dezelfde etappe heeft verschillende wegprofielen. Kies bij Vervoer en navigatie één vervoerswijze voor die etappe en bereken opnieuw.", "The same stage has different road profiles. Choose one transport mode for that stage in Transport and navigation, then calculate again."],
     INVALID_ROUTE_REQUEST: ["De gekozen etappe of route-instellingen zijn ongeldig. Open het venster opnieuw.", "The selected section or route settings are invalid. Reopen the window."],
   };
   const message = messages[roadRouteErrorCode(error) ?? ""] ?? ["Route kon niet worden berekend. Probeer het later opnieuw.", "The route could not be calculated. Try again later."];

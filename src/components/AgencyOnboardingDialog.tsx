@@ -1,32 +1,37 @@
-import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
+import { useEffect, useId, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Building2, Check, ChevronLeft, ChevronRight, Globe2, MailCheck, Palette, Send, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { completeAgencyOnboarding, getAgencySettings, saveAgencySettings, type AgencySettings } from "@/lib/agency.functions";
-import { getAgencyDeliverySettings, saveAgencyDeliverySettings, testAgencySmtp, verifyAgencyDomain, type AgencyDeliverySettings } from "@/lib/agency-delivery.functions";
+import { getAgencyDeliverySettings, saveAgencyDeliverySettings, testAgencySmtp, type AgencyDeliverySettings } from "@/lib/agency-delivery.functions";
 import { useLocale } from "@/lib/locale";
 import { useWorkspace } from "@/lib/workspace";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
+import { AgencyDomainTypeField } from "@/components/AgencyDomainInstructions";
+
+import { AgencyDnsSettings } from "@/components/AgencyDnsSettings";
+import { agencyDeliveryErrorMessage } from "@/lib/agency-delivery-mail";
 
 const steps = [Building2, Palette, Globe2, Send, ShieldCheck];
 
 export function AgencyOnboardingDialog({ enabled }: { enabled: boolean }) {
   const { text } = useLocale();
+  const accentLabelId = useId();
   const { refreshWorkspace } = useWorkspace();
+  const [step, setStep] = useState(0);
+  const [open, setOpen] = useState(false);
   const settingsQuery = useQuery({ queryKey: ["agency-settings"], queryFn: () => getAgencySettings(), enabled, retry: false });
-  const deliveryQuery = useQuery({ queryKey: ["agency-delivery"], queryFn: () => getAgencyDeliverySettings(), enabled, retry: false });
+  const deliveryQuery = useQuery({ queryKey: ["agency-delivery"], queryFn: () => getAgencyDeliverySettings(), enabled, retry: false, refetchInterval: query => open && step === 4 && query.state.data?.domainAutomationEnabled && query.state.data.provisioningState !== "active" ? 5000 : false });
   const [settings, setSettings] = useState<AgencySettings | null>(null);
   const [delivery, setDelivery] = useState<AgencyDeliverySettings | null>(null);
   const [smtpPassword, setSmtpPassword] = useState("");
   const [logoFile, setLogoFile] = useState<File>();
   const [turnstileConfirmed, setTurnstileConfirmed] = useState(false);
-  const [step, setStep] = useState(0);
-  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState("");
 
   useEffect(() => { if (settingsQuery.data) setSettings(settingsQuery.data); }, [settingsQuery.data]);
@@ -56,7 +61,7 @@ export function AgencyOnboardingDialog({ enabled }: { enabled: boolean }) {
       if (uploadedPath && settings!.logoPath) await supabase.storage.from("agency-logos").remove([settings!.logoPath]);
       setSettings(nextSettings);
       setLogoFile(undefined);
-      await Promise.all([settingsQuery.refetch(), refreshWorkspace()]);
+      await Promise.all([settingsQuery.refetch(), deliveryQuery.refetch(), refreshWorkspace()]);
       toast.success(text("Organisatie en huisstijl opgeslagen.", "Organisation and branding saved."));
       setStep(2);
     } catch { if (uploadedPath) await supabase.storage.from("agency-logos").remove([uploadedPath]); toast.error(text("Controleer de organisatiegegevens.", "Check the organisation details.")); }
@@ -78,6 +83,7 @@ export function AgencyOnboardingDialog({ enabled }: { enabled: boolean }) {
       await saveAgencyDeliverySettings({ data: {
         subdomain: delivery!.subdomain,
         customDomain: delivery!.customDomain,
+        dnsKind: delivery!.dnsKind,
         fromName: delivery!.fromName,
         fromEmail: delivery!.fromEmail,
         replyTo: delivery!.replyTo,
@@ -93,19 +99,7 @@ export function AgencyOnboardingDialog({ enabled }: { enabled: boolean }) {
       if (refreshed.data) setDelivery(refreshed.data);
       toast.success(text("Domein en e-mailinstellingen opgeslagen.", "Domain and email settings saved."));
       setStep(4);
-    } catch { toast.error(text("Domein of e-mailinstellingen zijn nog niet geldig.", "Domain or email settings are not valid yet.")); }
-    finally { setBusy(""); }
-  }
-
-  async function verifyDomain() {
-    setBusy("domain");
-    try {
-      const result = await verifyAgencyDomain();
-      await deliveryQuery.refetch();
-      toast[result.verified ? "success" : "error"](result.verified
-        ? text("DNS en eigendom zijn geverifieerd.", "DNS and ownership are verified.")
-        : text("DNS is nog niet compleet. Controleer CNAME en TXT.", "DNS is not complete yet. Check CNAME and TXT."));
-    } catch { toast.error(text("DNS-controle is mislukt.", "DNS verification failed.")); }
+    } catch (error) { toast.error(agencyDeliveryErrorMessage(error, text)); }
     finally { setBusy(""); }
   }
 
@@ -117,8 +111,8 @@ export function AgencyOnboardingDialog({ enabled }: { enabled: boolean }) {
   }
 
   async function finish() {
-    if (delivery!.customDomain && (delivery!.domainStatus !== "verified" || !turnstileConfirmed)) {
-      toast.error(text("Rond eerst DNS en Turnstile voor het eigen domein af.", "Complete DNS and Turnstile for the custom domain first."));
+    if (delivery!.customDomain && (delivery!.domainStatus !== "verified" || (!delivery!.domainAutomationEnabled && !turnstileConfirmed))) {
+      toast.error(delivery!.domainAutomationEnabled ? text("Verifieer eerst het eigen domein.", "Verify the custom domain first.") : text("Rond eerst DNS en Turnstile voor het eigen domein af.", "Complete DNS and Turnstile for the custom domain first."));
       return;
     }
     if (delivery!.smtpConfigured && delivery!.smtpTestStatus !== "ok") {
@@ -140,10 +134,14 @@ export function AgencyOnboardingDialog({ enabled }: { enabled: boolean }) {
     <div className="grid grid-cols-5 gap-2">{steps.map((Icon, index) => <button key={index} type="button" onClick={() => setStep(index)} className={`rounded-xl border p-2 ${index === step ? "border-primary bg-primary/10 text-primary" : index < step ? "text-emerald-600" : "text-muted-foreground"}`}><Icon className="mx-auto size-4"/><span className="sr-only">{index + 1}</span></button>)}</div>
     <div className="min-h-72 space-y-4 py-2">
       {step === 0 && <><h3 className="font-display text-xl font-semibold">{text("Welkom bij je eigen Agency-workspace", "Welcome to your own Agency workspace")}</h3><p className="text-sm text-muted-foreground">{text("Deze wizard controleert wat klanten straks zien en vanaf welk adres zij communicatie ontvangen. Er wordt niets openbaar gemaakt voordat jij dat opslaat en test.", "This wizard checks what clients will see and which address sends their communication. Nothing is published until you save and test it.")}</p><div className="grid gap-3 sm:grid-cols-3"><Info icon={Palette} title={text("Eigen merk", "Your brand")}/><Info icon={Globe2} title={text("Eigen portal", "Your portal")}/><Info icon={MailCheck} title={text("Geteste e-mail", "Tested email")}/></div></>}
-      {step === 1 && <div className="grid gap-4 sm:grid-cols-2"><Field label={text("Organisatienaam", "Organisation name")} value={settings.systemName} onChange={(value) => setSetting("systemName", value)}/><Field label={text("Afzendernaam", "Sender name")} value={settings.senderName} onChange={(value) => setSetting("senderName", value)}/><Field label={text("Contactadres", "Contact email")} type="email" value={settings.contactEmail} onChange={(value) => setSetting("contactEmail", value)}/><Field label="Tagline" value={settings.tagline} onChange={(value) => setSetting("tagline", value)}/><label className="space-y-2 text-sm sm:col-span-2"><span>{text("Accentkleur", "Accent colour")} · {settings.accent}°</span><Slider min={0} max={360} value={[settings.accent]} onValueChange={(value) => setSetting("accent", value[0] ?? 172)}/></label><label className="space-y-2 text-sm sm:col-span-2"><span>Logo</span><Input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy === "logo"} onChange={(event) => void uploadLogo(event.target.files?.[0])}/><small className="text-muted-foreground">PNG, JPG, WebP · max. 2 MB {settings.logoPath ? `· ${text("geselecteerd", "selected")}` : ""}</small></label></div>}
-      {step === 2 && <div className="space-y-4"><Field label={text("GlobeTrotr-subdomein", "GlobeTrotr subdomain")} value={delivery.subdomain} suffix=".globetrotr.nl" onChange={(value) => setDeliveryValue("subdomain", value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}/><Field label={text("Eigen domein (optioneel)", "Custom domain (optional)")} value={delivery.customDomain} placeholder="reizen.jouwbedrijf.nl" onChange={(value) => { setDeliveryValue("customDomain", value.toLowerCase().trim()); setTurnstileConfirmed(false); }}/>{delivery.customDomain && <div className="rounded-xl border bg-muted/30 p-4 text-sm"><p>CNAME <strong>{delivery.customDomain}</strong> → <strong>portal.globetrotr.nl</strong></p><p className="mt-2">TXT <strong>_globetrotr.{delivery.customDomain}</strong></p><code className="mt-1 block break-all text-xs">globetrotr-verification={delivery.verificationToken || text("verschijnt na opslaan", "appears after saving")}</code><p className="mt-3 text-xs text-muted-foreground">{text("Voeg daarnaast het hoofddomein toe onder Cloudflare Turnstile → Hostname Management. Bijvoorbeeld voor reizen.bedrijf.nl voeg je bedrijf.nl toe.", "Also add the root domain under Cloudflare Turnstile → Hostname Management. For example, for travel.company.com add company.com.")}</p><label className="mt-3 flex gap-2"><input type="checkbox" checked={turnstileConfirmed} onChange={(event) => setTurnstileConfirmed(event.target.checked)}/>{text("Turnstile-hoofddomein is toegevoegd", "Turnstile root domain has been added")}</label></div>}</div>}
-      {step === 3 && <div className="grid gap-4 sm:grid-cols-2"><Field label={text("Afzenderadres", "From address")} type="email" value={delivery.fromEmail} onChange={(value) => setDeliveryValue("fromEmail", value)}/><Field label="Reply-to" type="email" value={delivery.replyTo} onChange={(value) => setDeliveryValue("replyTo", value)}/><Field label="SMTP host" value={delivery.smtpHost} placeholder="smtp.jouwprovider.nl" onChange={(value) => setDeliveryValue("smtpHost", value)}/><Field label={text("SMTP-poort", "SMTP port")} type="number" value={String(delivery.smtpPort)} onChange={(value) => setDeliveryValue("smtpPort", Number(value))}/><Field label={text("SMTP-gebruikersnaam", "SMTP username")} value={delivery.smtpUsername} onChange={(value) => setDeliveryValue("smtpUsername", value)}/><Field label={text("SMTP-wachtwoord", "SMTP password")} type="password" value={smtpPassword} placeholder={delivery.smtpPasswordSet ? "••••••••••••" : ""} onChange={setSmtpPassword}/><label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={delivery.smtpSecure} onChange={(event) => setDeliveryValue("smtpSecure", event.target.checked)}/>{text("Direct TLS, meestal poort 465", "Direct TLS, usually port 465")}</label><p className="text-xs text-muted-foreground sm:col-span-2">{text("Laat SMTP leeg om voorlopig de centrale GlobeTrotr-relay te gebruiken. Je wachtwoord wordt versleuteld opgeslagen en nooit opnieuw getoond.", "Leave SMTP blank to use the central GlobeTrotr relay for now. Your password is stored encrypted and never shown again.")}</p></div>}
-      {step === 4 && <div className="space-y-3"><Status ok={Boolean(settings.systemName && settings.contactEmail)} label={text("Organisatie en huisstijl", "Organisation and branding")}/><Status ok={Boolean(delivery.subdomain)} label={text("Agency-subdomein", "Agency subdomain")}/><Status ok={!delivery.customDomain || delivery.domainStatus === "verified"} label={text("DNS en eigen domein", "DNS and custom domain")} action={delivery.customDomain ? <Button size="sm" variant="outline" disabled={busy === "domain"} onClick={() => void verifyDomain()}>{text("DNS testen", "Test DNS")}</Button> : undefined}/><Status ok={!delivery.customDomain || turnstileConfirmed} label="Cloudflare Turnstile"/><Status ok={!delivery.smtpConfigured || delivery.smtpTestStatus === "ok"} label={text("SMTP of centrale relay", "SMTP or central relay")} action={delivery.smtpConfigured ? <Button size="sm" variant="outline" disabled={busy === "smtp"} onClick={() => void testSmtp()}>{text("Testmail sturen", "Send test email")}</Button> : undefined}/><p className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">{text("Test na afronden ook registratie op het Agency-domein, een uitnodiging en een ontvangen e-mail. Passkeys blijven op externe domeinen verborgen omdat de GlobeTrotr RP-ID daar niet geldig is.", "After finishing, also test registration on the Agency domain, an invitation and a received email. Passkeys remain hidden on external domains because the GlobeTrotr RP ID is not valid there.")}</p></div>}
+      {step === 1 && <div className="grid gap-4 sm:grid-cols-2"><Field label={text("Organisatienaam", "Organisation name")} value={settings.systemName} onChange={(value) => setSetting("systemName", value)}/><Field label={text("Afzendernaam", "Sender name")} value={settings.senderName} onChange={(value) => setSetting("senderName", value)}/><Field label={text("Contactadres", "Contact email")} type="email" value={settings.contactEmail} onChange={(value) => setSetting("contactEmail", value)}/><Field label="Tagline" value={settings.tagline} onChange={(value) => setSetting("tagline", value)}/><div className="space-y-3 text-sm sm:col-span-2 [--primary:oklch(0.52_0.115_var(--agency-accent))] dark:[--primary:oklch(0.7_0.13_var(--agency-accent))]" style={{ "--agency-accent": settings.accent } as CSSProperties}>
+        <div className="flex items-center justify-between gap-3"><span id={accentLabelId}>{text("Accentkleur", "Accent colour")}</span><span className="flex items-center gap-2"><span aria-hidden="true" className="size-6 rounded-full border border-foreground/15 bg-primary"/><span className="tabular-nums text-muted-foreground">{settings.accent}°</span></span></div>
+        <Slider aria-labelledby={accentLabelId} min={0} max={360} value={[settings.accent]} onValueChange={(value) => setSetting("accent", value[0] ?? 172)}/>
+        <div className="flex flex-wrap items-center gap-3"><span aria-hidden="true" className="inline-flex min-h-9 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">{text("Voorbeeld", "Preview")}</span><span className="text-xs text-muted-foreground">{text("Zo ziet je accentkleur eruit.", "This is how your accent colour looks.")}</span></div>
+      </div><label className="space-y-2 text-sm sm:col-span-2"><span>Logo</span><Input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy === "logo"} onChange={(event) => void uploadLogo(event.target.files?.[0])}/><small className="text-muted-foreground">PNG, JPG, WebP · max. 2 MB {settings.logoPath ? `· ${text("geselecteerd", "selected")}` : ""}</small></label></div>}
+      {step === 2 && <div className="space-y-4"><Field label={text("GlobeTrotr-subdomein", "GlobeTrotr subdomain")} value={delivery.subdomain} suffix=".globetrotr.nl" onChange={(value) => setDeliveryValue("subdomain", value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}/><Field label={text("Eigen domein (optioneel)", "Custom domain (optional)")} value={delivery.customDomain} placeholder="reizen.jouwbedrijf.nl" onChange={(value) => { setDeliveryValue("customDomain", value.toLowerCase().trim()); setTurnstileConfirmed(false); }}/>{delivery.domainAutomationEnabled && <AgencyDomainTypeField value={delivery.dnsKind} onChange={value => setDeliveryValue("dnsKind", value)}/>}{delivery.customDomain && <div className="rounded-xl border bg-muted/30 p-4 text-sm">{delivery.customDomain === deliveryQuery.data?.customDomain && delivery.dnsKind === deliveryQuery.data?.dnsKind ? <AgencyDnsSettings settings={delivery}/> : <p>{text("Sla je domein op om de juiste DNS-records te ontvangen.", "Save your domain to receive the correct DNS records.")}</p>}{delivery.domainAutomationEnabled && <p className="mt-3 text-xs text-muted-foreground">{text("Nieuwe accounts registreren veilig via GlobeTrotr. Daarna kunnen klanten op je eigen domein aanmelden.", "New accounts register securely through GlobeTrotr. Clients can then sign in on your own domain.")}</p>}{!delivery.domainAutomationEnabled && <><p className="mt-3 text-xs text-muted-foreground">{text("Vraag GlobeTrotr-beheer dit domein aan de Turnstile-widget toe te voegen. Bevestig pas na controle.", "Ask GlobeTrotr support to add this hostname to the Turnstile widget. Confirm only after verification.")}</p><label className="mt-3 flex gap-2"><input type="checkbox" checked={turnstileConfirmed} onChange={(event) => setTurnstileConfirmed(event.target.checked)}/>{text("Domein is aan Turnstile toegevoegd", "Hostname has been added to Turnstile")}</label></>}</div>}</div>}
+      {step === 3 && <div className="grid gap-4 sm:grid-cols-2"><Field label={text("Afzenderadres", "From address")} type="email" value={delivery.fromEmail} placeholder={settings.contactEmail} onChange={(value) => setDeliveryValue("fromEmail", value)}/><Field label="Reply-to" type="email" value={delivery.replyTo} onChange={(value) => setDeliveryValue("replyTo", value)}/><Field label="SMTP host" value={delivery.smtpHost} placeholder="smtp.jouwprovider.nl" onChange={(value) => setDeliveryValue("smtpHost", value)}/><Field label={text("SMTP-poort", "SMTP port")} type="number" value={String(delivery.smtpPort)} onChange={(value) => setDeliveryValue("smtpPort", Number(value || 587))}/><Field label={text("SMTP-gebruikersnaam", "SMTP username")} value={delivery.smtpUsername} onChange={(value) => setDeliveryValue("smtpUsername", value)}/><Field label={text("SMTP-wachtwoord", "SMTP password")} type="password" value={smtpPassword} placeholder={delivery.smtpPasswordSet ? "••••••••••••" : ""} onChange={setSmtpPassword}/><label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={delivery.smtpSecure} onChange={(event) => setDeliveryValue("smtpSecure", event.target.checked)}/>{text("Direct TLS, meestal poort 465", "Direct TLS, usually port 465")}</label><p className="text-xs text-muted-foreground sm:col-span-2">{text("Een eigen SMTP-server is optioneel. Laat host, gebruikersnaam en wachtwoord leeg voor de GlobeTrotr-relay. Een leeg afzenderadres gebruikt het contactadres van je organisatie. Je wachtwoord wordt versleuteld opgeslagen en nooit opnieuw getoond.", "Your own SMTP server is optional. Leave host, username and password blank to use the GlobeTrotr relay. A blank from address uses your organisation contact email. Your password is stored encrypted and never shown again.")}</p></div>}
+      {step === 4 && <div className="space-y-3"><Status ok={Boolean(settings.systemName && settings.contactEmail)} label={text("Organisatie en huisstijl", "Organisation and branding")}/><Status ok={Boolean(delivery.subdomain)} label={text("Agency-subdomein", "Agency subdomain")}/><Status ok={!delivery.customDomain || delivery.domainStatus === "verified"} label={text("DNS en eigen domein", "DNS and custom domain")} action={delivery.customDomain ? <AgencyDnsSettings settings={delivery}/> : undefined}/>{!delivery.domainAutomationEnabled && <Status ok={!delivery.customDomain || turnstileConfirmed} label="Cloudflare Turnstile"/>}<Status ok={!delivery.smtpConfigured || delivery.smtpTestStatus === "ok"} label={text("SMTP of centrale relay", "SMTP or central relay")} action={delivery.smtpConfigured ? <Button size="sm" variant="outline" disabled={busy === "smtp"} onClick={() => void testSmtp()}>{text("Testmail sturen", "Send test email")}</Button> : undefined}/><p className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">{text("Test na afronden ook registratie op het Agency-domein, een uitnodiging en een ontvangen e-mail. Passkeys blijven op externe domeinen verborgen omdat de GlobeTrotr RP-ID daar niet geldig is.", "After finishing, also test registration on the Agency domain, an invitation and a received email. Passkeys remain hidden on external domains because the GlobeTrotr RP ID is not valid there.")}</p></div>}
     </div>
     <div className="flex flex-wrap justify-between gap-2"><Button variant="ghost" disabled={step === 0 || Boolean(busy)} onClick={() => setStep((value) => Math.max(0, value - 1))}><ChevronLeft className="size-4"/>{text("Vorige", "Previous")}</Button><div className="flex gap-2"><Button variant="outline" onClick={() => setOpen(false)}>{text("Later verder", "Continue later")}</Button>{step === 1 ? <Button disabled={Boolean(busy)} onClick={() => void saveBranding()}>{text("Opslaan en verder", "Save and continue")}</Button> : step === 2 ? <Button disabled={!delivery.subdomain || Boolean(busy)} onClick={() => setStep(3)}>{text("Verder", "Continue")}<ChevronRight className="size-4"/></Button> : step === 3 ? <Button disabled={Boolean(busy)} onClick={() => void saveDelivery()}>{text("Opslaan en controleren", "Save and review")}</Button> : step === 4 ? <Button disabled={Boolean(busy)} onClick={() => void finish()}><Check className="size-4"/>{text("Onboarding afronden", "Complete onboarding")}</Button> : <Button onClick={() => setStep(1)}>{text("Beginnen", "Get started")}<ChevronRight className="size-4"/></Button>}</div></div>
   </DialogContent></Dialog>;

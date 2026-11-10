@@ -1,3 +1,6 @@
+import { randomBytes } from "node:crypto";
+import { withCspNonce } from "./lib/csp-context.server";
+import { withSecurityHeaders } from "./lib/security-headers";
 import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
@@ -46,16 +49,18 @@ function isH3SwallowedErrorBody(body: string): boolean {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    const pathname = new URL(request.url).pathname;
+    const nonce = randomBytes(24).toString("base64url");
     try {
       const handler = await getServerEntry();
-      const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(response);
+      const response = await withCspNonce(nonce, () => handler.fetch(request, env, ctx));
+      return withSecurityHeaders(await normalizeCatastrophicSsrResponse(response), nonce, pathname);
     } catch (error) {
       console.error(error);
-      return new Response(renderErrorPage(), {
+      return withSecurityHeaders(new Response(renderErrorPage(), {
         status: 500,
         headers: { "content-type": "text/html; charset=utf-8" },
-      });
+      }), nonce, pathname);
     }
   },
 };

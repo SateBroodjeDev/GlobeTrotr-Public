@@ -4,14 +4,104 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Feedback without moving targets: shared by the website and portal. */
+.ui-button {
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+@keyframes interface-panel-in {
+  from { opacity: 0.94; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ui-tab-panel[data-state="active"], .guided-demo section {
+    animation: interface-panel-in 180ms ease-out;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-button, [role="tab"], [role="switch"], [role="switch"] > span,
+  [data-state] > svg {
+    transition: none;
+  }
+  .ui-tab-panel, .guided-demo section { animation: none; }
+}
+
 /* Public editorial pages. Dashboard and white-label application layouts retain
    their existing styles; accents still follow the shared brand tokens. */
+.features-hero {
+  background: linear-gradient(135deg, color-mix(in oklab, var(--primary) 12%, var(--background)), var(--background) 75%);
+  border: 1px solid color-mix(in oklab, var(--primary) 18%, var(--border));
+}
+.feature-tone-0 { --feature-tint: color-mix(in oklab, var(--primary) 13%, var(--card)); }
+.feature-tone-1 { --feature-tint: color-mix(in oklab, #dcb16c 16%, var(--card)); }
+.feature-tone-2 { --feature-tint: color-mix(in oklab, #6ea9e6 16%, var(--card)); }
+.feature-illustration {
+  min-width: 0;
+  padding: 1.5rem;
+  border: 1px solid color-mix(in oklab, var(--primary) 12%, var(--border));
+  border-radius: 1.5rem;
+  background: var(--feature-tint);
+  color: var(--foreground);
+}
+.feature-icon {
+  display: inline-grid;
+  width: 3rem;
+  height: 3rem;
+  place-items: center;
+  border-radius: 1rem;
+  background: var(--feature-tint);
+  color: var(--foreground);
+}
+.feature-plan-note { background: color-mix(in oklab, var(--primary) 5%, var(--card)); }
+.marketing-example { background: color-mix(in oklab, var(--primary) 7%, var(--background)); }
+.features-page [role="tab"] { transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease; }
+@media (prefers-reduced-motion: reduce) {
+  .features-page [role="tab"] { transition: none; }
+}
 .marketing-hero h1 {
   letter-spacing: -0.045em;
   text-wrap: balance;
 }
 .marketing-hero {
   isolation: isolate;
+}
+.marketing-page, .public-site-header, .public-footer {
+  font-family: var(--font-sans, "DM Sans", ui-sans-serif, system-ui, sans-serif);
+}
+.marketing-page :where(h2, h3) { text-wrap: balance; }
+.marketing-page :where(p) { text-wrap: pretty; }
+.marketing-page .marketing-hero :where(p) { line-height: 1.7; }
+.marketing-page .marketing-hero > p { max-width: 65ch; margin-inline: auto; }
+.marketing-page :where(a, button):focus-visible,
+.public-footer :where(a, button):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+}
+.public-site-header button { min-height: 2.75rem; }
+.public-site-header nav a { padding-inline: 0.65rem; }
+.public-footer :where(a, button) { transition: color 160ms ease; }
+.public-footer :where(a, button):hover { color: var(--foreground); }
+.public-footer nav > div { min-width: 0; }
+.public-footer nav :where(a, button) { overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) {
+  .public-footer :where(a, button) { transition: none; }
+  .public-mobile-menu { animation: none; }
+}
+/* Small, finite responses on public landing pages only. */
+@media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
+  .marketing-motion :where(a.inline-flex, button, .marketing-choice, .marketing-editorial-card) {
+    transition: translate 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+  }
+  .marketing-motion :where(a.inline-flex, button):not(:disabled):not([aria-disabled="true"]):hover {
+    translate: 0 -1px;
+  }
+  .marketing-motion :where(.marketing-choice, .marketing-editorial-card):hover {
+    translate: 0 -2px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marketing-motion :where(a.inline-flex, button, .marketing-choice, .marketing-editorial-card) {
+    transition: none;
+  }
 }
 /* Homepage colour rhythm, deliberately scoped away from dashboards and Agency hosts. */
 .homepage {
@@ -95,6 +185,25 @@
 }
 .home-next {
   background: var(--home-mint);
+}
+.home-insights {
+  background: linear-gradient(130deg, var(--home-mint), color-mix(in oklab, var(--home-sand) 40%, var(--background)) 80%);
+  border: 1px solid color-mix(in oklab, var(--primary) 15%, var(--border));
+}
+.home-insights-icon { display: grid; place-items: center; width: 3.25rem; height: 3.25rem; border-radius: 1rem; background: var(--home-sand); }
+.home-fact { min-width: 0; padding: 0.85rem; border-radius: 1rem; }
+.home-fact-0 { background: color-mix(in oklab, var(--home-mint) 65%, var(--card)); }
+.home-fact-1 { background: color-mix(in oklab, var(--home-sky) 65%, var(--card)); }
+.home-fact-2 { background: color-mix(in oklab, var(--home-lilac) 65%, var(--card)); }
+.home-fact dd { display: flex; align-items: center; min-height: 3rem; overflow-wrap: anywhere; }
+.home-category-icon { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; flex-shrink: 0; border-radius: 0.5rem; color: #153d39; }
+.home-chart-mint { background-color: #79c7af; }
+.home-chart-blue { background-color: #9bbfe0; }
+.home-chart-peach { background-color: #efc293; }
+.home-chart-lilac { background-color: #c4addd; }
+.home-budget-bar { transition: width 380ms cubic-bezier(.2,.65,.3,1); }
+@media (prefers-reduced-motion: reduce) {
+  .home-budget-bar { transition: none; }
 }
 @media (max-width: 640px) {
   .home-hero { border-radius: 1.5rem; }
@@ -287,9 +396,9 @@
 }
 .marketing-plan {
   box-shadow: none;
-  border-radius: 0;
-  border-width: 1px 0 0;
-  background: transparent;
+  border-radius: 1.25rem;
+  border-width: 1px;
+  background: var(--card);
 }
 .marketing-choice {
   position: relative;
@@ -368,11 +477,10 @@
   }
 }
 .marketing-editorial-card {
-  border: 0;
-  border-radius: 0;
+  border-width: 1px;
+  border-radius: 1.25rem;
   box-shadow: none;
-  background: transparent;
-  border-top: 2px solid var(--border);
+  background: var(--card);
 }
 .marketing-editorial-card--group {
   border-color: var(--primary);
@@ -383,13 +491,13 @@
   );
 }
 .marketing-invitation {
-  border-radius: 50% 50% 1.5rem 1.5rem / 2.5rem 2.5rem 1.5rem 1.5rem;
+  border-radius: 1.5rem;
   background: linear-gradient(
     160deg,
     color-mix(in oklab, var(--primary) 14%, var(--background)),
     var(--background)
   );
-  border-bottom: 1px solid var(--border);
+  border: 1px solid var(--border);
 }
 @media (max-width: 640px) {
   .journey-caption p:last-child {
@@ -537,6 +645,16 @@
   --shadow-soft: 0 1px 2px oklch(0 0 0 / 0.2), 0 8px 24px oklch(0 0 0 / 0.18);
 }
 
+/* Small platform accents from the supplied guide; Agency hues stay independent. */
+:root[data-platform-brand="globetrotr"] {
+  --primary: #117a65;
+  --ring: #117a65;
+}
+:root.dark[data-platform-brand="globetrotr"] {
+  --primary: #66b2a1;
+  --ring: #66b2a1;
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
@@ -585,6 +703,49 @@
   padding-inline: 0.75rem;
   font-size: 0.875rem;
   color: var(--color-foreground);
+}
+
+/* Portal V1 trip overviews */
+.trip-card-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.trip-overview-card:has(.trip-card-link:focus-visible) {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 3px;
+}
+.trip-overview-card:hover {
+  border-color: var(--color-primary);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .trip-overview-card {
+    transition: border-color 160ms ease, box-shadow 160ms ease;
+  }
+  .trip-overview-card:hover {
+    box-shadow: 0 8px 24px -16px var(--color-primary);
+  }
+}
+.trip-workspace-tabs [role="tab"] {
+  position: relative;
+  min-height: 44px;
+  border-radius: 0;
+  box-shadow: none;
+}
+.trip-workspace-tabs [role="tab"][data-state="active"] {
+  background: transparent;
+  color: var(--color-primary);
+}
+.trip-workspace-tabs [role="tab"][data-state="active"]::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 15%;
+  right: 15%;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
 }
 
 /* Leaflet map skin */

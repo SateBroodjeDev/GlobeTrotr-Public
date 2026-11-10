@@ -1,3 +1,4 @@
+import { signOutWithPushCleanup } from "@/lib/push-account";
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -21,18 +22,19 @@ import {
 import { useLocale } from "@/lib/locale";
 import { getPublicFeatureFlags } from "@/lib/corporate-governance.functions";
 import { getMaintenanceState } from "@/lib/maintenance.functions";
+import { maintenanceQueryOptions } from "@/lib/maintenance-query";
 import { KeyRound } from "lucide-react";
 import type { Provider } from "@supabase/supabase-js";
 import { safeInternalRedirect } from "@/lib/safe-redirect";
 import { agencyHostLookup } from "@/lib/agency-domain";
 import { getPublicAgencyHostBranding, publicAgencyLogoUrl } from "@/lib/agency-host-branding";
 import { publicSiteUrl } from "@/lib/site-routing";
-import { localizedAuthError } from "@/lib/auth-error";
+import { localizedAuthError, localizedPasskeyError } from "@/lib/auth-error";
 import { getStaffSsoConfiguration } from "@/lib/staff-sso-public.functions";
 import { staffLoginOptions, staffLoginVisible, STAFF_SSO_PROVIDER } from "@/lib/staff-sso";
 import { getStaffSecurityStatus } from "@/lib/staff-security.functions";
 import { staffLoginRequired } from "@/lib/staff-account-access";
-import { recoveryCallback } from "@/lib/auth-email-flow";
+import { recoveryCallback, agencyAuthEmailRedirect, isPrivateAgencyEmailRejection } from "@/lib/auth-email-flow";
 
 export const Route = createFileRoute("/auth")({
   validateSearch: (search: Record<string, unknown>): { redirect?: string } => {
@@ -99,6 +101,7 @@ export function AuthPage({ initialMode = "signin" }: { initialMode?: "signin" | 
     queryFn: () => getPublicAgencyHostBranding(hostname),
     enabled: agencyHost,
     retry: false,
+    staleTime: 60_000,
   });
   const brandName = hostBranding.data?.brandName ?? (agencyHost ? "Agency portal" : "GlobeTrotr");
   const brandLogo = publicAgencyLogoUrl(hostBranding.data?.logoPath);
@@ -108,8 +111,7 @@ export function AuthPage({ initialMode = "signin" }: { initialMode?: "signin" | 
     retry: false,
   });
   const maintenance = useQuery({
-    queryKey: ["public-maintenance"],
-    queryFn: () => getMaintenanceState(),
+    ...maintenanceQueryOptions(() => getMaintenanceState()),
     retry: false,
   });
   const maintenanceLogin = maintenance.data?.active === true;
@@ -139,7 +141,7 @@ export function AuthPage({ initialMode = "signin" }: { initialMode?: "signin" | 
     let active = true;
     void (async () => {
       if (maintenanceLogin && session.user.app_metadata?.corporate_admin !== true) {
-        await supabase.auth.signOut();
+        await signOutWithPushCleanup(() => supabase.auth.signOut());
         if (active)
           setFormError(
             text(
@@ -296,16 +298,15 @@ export function AuthPage({ initialMode = "signin" }: { initialMode?: "signin" | 
   }
 
   async function signInWithPasskey() {
+    setFormError("");
     setPasskeyBusy(true);
     try {
       const { error } = await supabase.auth.signInWithPasskey();
       if (error) throw error;
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : text("Inloggen met passkey is mislukt.", "Passkey sign-in failed."),
-      );
+      const message = localizedPasskeyError(error, language, agencyHost);
+      setFormError(message);
+      toast.error(message);
     } finally {
       setPasskeyBusy(false);
     }
@@ -375,26 +376,27 @@ export function AuthPage({ initialMode = "signin" }: { initialMode?: "signin" | 
     try {
       const callback = new URL("/auth", window.location.origin);
       if (destination) callback.searchParams.set("redirect", destination);
+      const agencyCallback = agencyAuthEmailRedirect(window.location.origin);
       const result =
         action === "recovery"
           ? await supabase.auth.resetPasswordForEmail(normalized, {
-              redirectTo: recoveryCallback(window.location.origin),
+              redirectTo: agencyCallback ?? recoveryCallback(window.location.origin),
             })
           : await supabase.auth.signInWithOtp({
               email: normalized,
               options: {
-                emailRedirectTo: callback.toString(),
-                shouldCreateUser: registrationEnabled,
+                emailRedirectTo: agencyCallback ?? callback.toString(),
+                shouldCreateUser: !agencyHost && registrationEnabled,
                 data: { language },
               },
             });
-      if (result.error) throw result.error;
+      if (result.error && !(agencyHost && isPrivateAgencyEmailRejection(result.error))) throw result.error;
       setEmail(normalized);
       setSentKind(action);
       setSent(true);
     } catch (error) {
       toast.error(
-        error instanceof Error
+        agencyHost ? text("De e-mailaanvraag kon niet worden afgerond. Probeer het later opnieuw.", "The email request could not be completed. Please try again later.") : error instanceof Error
           ? error.message
           : text("De e-mail kon niet worden aangevraagd.", "The email could not be requested."),
       );
@@ -477,12 +479,16 @@ export function AuthPage({ initialMode = "signin" }: { initialMode?: "signin" | 
             <div className="space-y-4 text-sm">
               <p>
                 {text(
-                  sentKind === "recovery"
+                  agencyHost && sentKind !== "confirmation"
+                    ? "Als dit e-mailadres toegang heeft tot deze Agency, ontvang je een e-mail op"
+                    : sentKind === "recovery"
                     ? "Als dit account bestaat, hebben we een herstelmail gestuurd naar"
                     : sentKind === "magic"
                       ? "We hebben een veilige inloglink gestuurd naar"
                       : "We hebben een bevestigingsmail gestuurd naar",
-                  sentKind === "recovery"
+                  agencyHost && sentKind !== "confirmation"
+                    ? "If this email address has access to this Agency, you will receive an email at"
+                    : sentKind === "recovery"
                     ? "If this account exists, we sent a recovery email to"
                     : sentKind === "magic"
                       ? "We sent a secure sign-in link to"
@@ -638,9 +644,12 @@ export function AuthPage({ initialMode = "signin" }: { initialMode?: "signin" | 
                 {agencyTurnstilePending && (
                   <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
                     {text(
-                      `Zelf registreren op ${hostname} wordt binnenkort geactiveerd. Vraag ${brandName} om een uitnodiging of log in met een bestaand account.`,
-                      `Self-registration on ${hostname} will be activated soon. Ask ${brandName} for an invitation or sign in with an existing account.`,
+                      `Maak je account aan via het beveiligde GlobeTrotr-portaal of vraag ${brandName} om een uitnodiging. Daarna kun je hier inloggen.`,
+                      `Create your account through the secure GlobeTrotr portal or ask ${brandName} for an invitation. You can then sign in here.`,
                     )}
+                    {" "}<a className="underline" href={`https://portal.globetrotr.nl/auth?${new URLSearchParams({ mode: "signup", redirect: destination || "/dashboard" })}`}>
+                      {text("Account aanmaken", "Create account")}
+                    </a>
                   </p>
                 )}
                 {formError && (

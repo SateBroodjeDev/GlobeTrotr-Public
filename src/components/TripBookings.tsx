@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   BedDouble,
   Car,
@@ -8,6 +8,7 @@ import {
   Pencil,
   Plane,
   Plus,
+  Paperclip,
   RefreshCw,
   Ticket,
   TrainFront,
@@ -18,6 +19,9 @@ import { CURRENCIES, formatMoney } from "@/lib/services";
 import type { GeoResult } from "@/lib/services";
 import { isRoutePlanningItem, type TransportMode, type TravelItem, type TravelItemType, type Trip } from "@/lib/types";
 import { PlaceSearch } from "@/components/PlaceSearch";
+import { TripDocumentUploadDialog } from "@/components/TripDocumentUploadDialog";
+import { TripDocumentViewer } from "@/components/TripDocumentViewer";
+import { useTripDocuments } from "@/components/useTripDocuments";
 import { FlightDisruptionCard } from "@/components/FlightDisruptionCard";
 import { buildFlightConnections } from "@/lib/flight-disruption";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +40,8 @@ import { useLocale } from "@/lib/locale";
 import { localizeCountry } from "@/lib/localized-values";
 import { resolveParticipantId, type FinancialParticipant } from "@/lib/settle";
 import { transportModeUsesOwnFuel } from "@/lib/fuel-costs";
+
+import { transportTimeSummary } from "@/lib/trip-timeline";
 
 const TYPES: { id: TravelItemType; label: string; icon: typeof Plane }[] = [
   { id: "flight", label: "Vlucht", icon: Plane },
@@ -129,6 +135,8 @@ export function TripBookings({
   onRemove: (id: string) => Promise<void>;
 }) {
   const { locale, text } = useLocale();
+  const [locationEditors,setLocationEditors]=useState<Record<string,boolean>>({});
+  const locationEditing=Object.values(locationEditors).some(Boolean);
   const [draft, setDraft] = useState<Draft>(() =>
     initialItem
       ? {
@@ -144,6 +152,21 @@ export function TripBookings({
   const [loadingFlight, setLoadingFlight] = useState(false);
   const [refreshingFlightId, setRefreshingFlightId] = useState<string>();
   const [saving, setSaving] = useState(false);
+  const [documentOpen, setDocumentOpen] = useState(false);
+  const documents = useTripDocuments(trip.id);
+  const [documentBooking, setDocumentBooking] = useState<TravelItem>();
+  const [missingField, setMissingField] = useState<"title" | "date">();
+  const nameInput = useRef<HTMLInputElement>(null);
+  const dateInput = useRef<HTMLInputElement>(null);
+  const errorId = useId();
+  const nameLabel = draft.type === "flight" ? text("Naam vlucht", "Flight name")
+    : draft.type === "activity" ? text("Naam activiteit", "Activity name")
+    : draft.type === "lodging" ? text("Hotelnaam", "Hotel name")
+    : draft.type === "car_rental" ? text("Huurauto / reservering", "Rental car / reservation")
+    : text("Naam / verbinding", "Name / connection");
+  const missingMessage = missingField === "title"
+    ? text(`Vul het veld ‘${nameLabel}’ in.`, `Enter a value in ‘${nameLabel}’.`)
+    : text(`Vul het veld ‘${dateLabel(draft.type)}’ in.`, `Enter a value in ‘${dateLabelEn(draft.type)}’.`);
   const [paidBy, setPaidBy] = useState(
     () =>
       resolveParticipantId(
@@ -185,6 +208,9 @@ export function TripBookings({
     value: string | number | boolean | undefined,
   ) => setDraft((current) => ({ ...current, details: { ...current.details, [key]: value } }));
   const reset = (date = trip.start) => {
+    setDocumentOpen(false);
+    setLocationEditors({});
+    setMissingField(undefined);
     setDraft(emptyDraft(date));
     setDeparture(undefined);
     setArrival(undefined);
@@ -236,6 +262,7 @@ export function TripBookings({
   }
   function applyFlightSuggestion() {
     if (!flight) return;
+    setMissingField(undefined);
     const departureTime = localClock(flight.departure?.actual || flight.departure?.scheduled);
     const arrivalTime = localClock(flight.arrival?.estimated || flight.arrival?.scheduled);
     if (flight.departure?.location) setDeparture(flight.departure.location);
@@ -288,10 +315,15 @@ export function TripBookings({
     } finally { setRefreshingFlightId(undefined); }
   }
   async function save() {
-    if (!editable || saving || loadingFlight) return;
+    if(locationEditing) return;
+    if (!editable || saving || loadingFlight || documentOpen) return;
     const title = draft.title.trim();
     if (!title || !draft.date) {
-      toast.error(text("Vul minstens een naam en datum in.", "Enter at least a name and date."));
+      setMissingField(!title ? "title" : "date");
+      toast.error(!title
+        ? text(`Vul het veld ‘${nameLabel}’ in.`, `Enter a value in ‘${nameLabel}’.`)
+        : text(`Vul het veld ‘${dateLabel(draft.type)}’ in.`, `Enter a value in ‘${dateLabelEn(draft.type)}’.`));
+      (!title ? nameInput : dateInput).current?.focus();
       return;
     }
     if (draft.type === "transport" && !draft.details?.transportMode && !editingId) {
@@ -362,6 +394,8 @@ export function TripBookings({
     }
   }
   function edit(item: TravelItem) {
+    setLocationEditors({});
+    setMissingField(undefined);
     const { id: _id, departure: _dep, arrival: _arr, location: _loc, amount, ...rest } = item;
     setEditingId(item.id);
     setDraft({
@@ -395,7 +429,7 @@ export function TripBookings({
           <Button
             size="sm"
             variant="ghost"
-            disabled={saving || loadingFlight}
+            disabled={saving || loadingFlight || documentOpen}
             onClick={() => reset(draft.date)}
           >
             {text("Annuleren", "Cancel")}
@@ -403,16 +437,17 @@ export function TripBookings({
         )}
       </CardHeader>
       <CardContent>
-        <fieldset disabled={saving || loadingFlight} className="space-y-4 min-w-0">
+        <fieldset disabled={saving || loadingFlight || documentOpen} className="space-y-4 min-w-0">
           <div className="grid items-end gap-3 md:grid-cols-4">
             <Field label={text("Type", "Type")}>
               <select
                 aria-label={text("Type reisonderdeel", "Travel item type")}
                 className="form-control"
                 value={draft.type}
-                disabled={!editable}
+                disabled={!editable || locationEditing}
                 onChange={(e) => {
                   const type = e.target.value as TravelItemType;
+                  setMissingField(undefined);
                   setDraft((current) => ({
                     ...current,
                     type,
@@ -430,12 +465,15 @@ export function TripBookings({
             </Field>
             <Field label={text(dateLabel(draft.type), dateLabelEn(draft.type))}>
               <Input
+                ref={dateInput}
+                aria-invalid={missingField === "date" || undefined}
+                aria-describedby={missingField === "date" ? errorId : undefined}
                 type="date"
                 value={draft.date}
                 min={trip.start || undefined}
                 max={trip.end || undefined}
                 disabled={!editable}
-                onChange={(e) => setDraft((current) => ({ ...current, date: e.target.value }))}
+                onChange={(e) => { setMissingField(undefined); setDraft((current) => ({ ...current, date: e.target.value })); }}
               />
             </Field>
             {draft.type === "flight" ? (
@@ -481,22 +519,15 @@ export function TripBookings({
                 </Button>
               </Field>
             ) : (
-              <Field
-                label={
-                  draft.type === "activity"
-                    ? text("Naam activiteit", "Activity name")
-                    : draft.type === "lodging"
-                      ? text("Hotelnaam", "Hotel name")
-                      : draft.type === "car_rental"
-                        ? text("Huurauto / reservering", "Rental car / reservation")
-                        : text("Naam / verbinding", "Name / connection")
-                }
-              >
+              <Field label={nameLabel}>
                 <Input
+                  ref={nameInput}
+                  aria-invalid={missingField === "title" || undefined}
+                  aria-describedby={missingField === "title" ? errorId : undefined}
                   value={draft.title}
                   disabled={!editable}
                   placeholder={text("Naam", "Name")}
-                  onChange={(e) => setDraft((current) => ({ ...current, title: e.target.value }))}
+                  onChange={(e) => { setMissingField(undefined); setDraft((current) => ({ ...current, title: e.target.value })); }}
                 />
               </Field>
             )}
@@ -521,12 +552,15 @@ export function TripBookings({
                   }
                 />
               </Field>
-              <Field label={text("Titel", "Title")}>
+              <Field label={nameLabel}>
                 <Input
+                  ref={nameInput}
+                  aria-invalid={missingField === "title" || undefined}
+                  aria-describedby={missingField === "title" ? errorId : undefined}
                   value={draft.title}
                   disabled={!editable}
-                  placeholder={text("Wordt automatisch ingevuld", "Filled automatically")}
-                  onChange={(e) => setDraft((current) => ({ ...current, title: e.target.value }))}
+                  placeholder={text("Bijv. Aer Lingus EI3328", "E.g. Aer Lingus EI3328")}
+                  onChange={(e) => { setMissingField(undefined); setDraft((current) => ({ ...current, title: e.target.value })); }}
                 />
               </Field>
               <Field label={text("Vertrektijd", "Departure time")}>
@@ -564,6 +598,19 @@ export function TripBookings({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+          {draft.type === "transport" && (
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field label={text("Vertrektijd", "Departure time")}>
+                <Input type="time" value={draft.details?.startTime ?? ""} disabled={!editable}
+                  onChange={(event) => detail("startTime", event.target.value)} />
+              </Field>
+              <Field label={text("Aankomsttijd", "Arrival time")}>
+                <Input type="time" value={draft.details?.endTime ?? ""} disabled={!editable}
+                  onChange={(event) => detail("endTime", event.target.value)} />
+              </Field>
+              <p className="text-xs text-muted-foreground md:col-span-2">{text("Tijden zijn optioneel en lokaal. Kom je een dag later aan? Vul ook de einddatum in.", "Times are optional and local. Arriving on a later day? Enter the end date too.")}</p>
             </div>
           )}
           {draft.type === "activity" && (
@@ -783,34 +830,40 @@ export function TripBookings({
               )}
             </div>
           )}
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className={`grid gap-3 ${typeIsMoving ? "md:grid-cols-2" : ""}`}>
             {typeIsMoving ? (
               <>
                 <LocationPicker
+                  key={`${editingId || "new"}-${draft.type}-departure`}
                   label={
                     draft.type === "car_rental"
                       ? text("Ophaallocatie", "Collection location")
                       : text("Vertreklocatie", "Departure location")
                   }
                   value={departure}
+                  onEditingChange={editing=>setLocationEditors(current=>({...current,departure:editing}))}
                   onPick={setDeparture}
                   disabled={!editable}
                 />
                 <LocationPicker
+                  key={`${editingId || "new"}-${draft.type}-arrival`}
                   label={
                     draft.type === "car_rental"
                       ? text("Inleverlocatie", "Return location")
                       : text("Aankomstlocatie", "Arrival location")
                   }
                   value={arrival}
+                  onEditingChange={editing=>setLocationEditors(current=>({...current,arrival:editing}))}
                   onPick={setArrival}
                   disabled={!editable}
                 />
               </>
             ) : (
               <LocationPicker
+                key={`${editingId || "new"}-${draft.type}-location`}
                 label={text("Locatie", "Location")}
                 value={location}
+                onEditingChange={editing=>setLocationEditors(current=>({...current,location:editing}))}
                 onPick={setLocation}
                 disabled={!editable}
               />
@@ -828,12 +881,12 @@ export function TripBookings({
             <span className="block text-xs text-muted-foreground">{text("Verandert alleen de kaartgroepering. De boekingslocatie, datums en openbare deelkeuze blijven behouden.", "Changes map grouping only. Booking location, dates and public sharing choice are retained.")}</span>
           </label>}
           {(draft.type === "flight" || draft.type === "transport") && <div className="grid gap-3 md:grid-cols-2">
-            {(["routeDepartureStopId", "routeArrivalStopId"] as const).map((key) => <label key={key} className="space-y-1 text-sm"><span>{key === "routeDepartureStopId" ? text("Routepunt vóór vertrek", "Route stop before departure") : text("Routepunt na aankomst", "Route stop after arrival")}</span><select className="h-10 w-full rounded-md border bg-background px-3" disabled={!editable} value={draft.details?.[key] ?? "auto"} onChange={(event) => detail(key, event.target.value === "auto" ? undefined : event.target.value)}><option value="auto">{text("Automatisch op basis van reisdatums", "Automatic using trip dates")}</option><option value="">{text("Geen aansluitende rit", "No connecting transfer")}</option>{trip.stops.map(stop => <option key={stop.id} value={stop.id}>{stop.name}</option>)}</select></label>)}
+            {(["routeDepartureStopId", "routeArrivalStopId"] as const).map((key) => <label key={key} className="space-y-1 text-sm"><span>{key === "routeDepartureStopId" ? text("Routepunt vóór vertrek", "Route stop before departure") : text("Routepunt na aankomst", "Route stop after arrival")}</span><select className="h-10 w-full rounded-md border bg-background px-3" disabled={!editable} value={draft.details?.[key] ?? "auto"} onChange={(event) => detail(key, event.target.value === "auto" ? undefined : event.target.value)}><option value="auto">{text("Automatisch via nabijgelegen routepunten", "Automatic using nearby route stops")}</option><option value="">{text("Geen aansluitende rit", "No connecting transfer")}</option>{trip.stops.map((stop, index) => <option key={stop.id} value={stop.id}>{index + 1}. {stop.name}{stop.arrive ? ` · ${stop.arrive}` : ""}</option>)}</select></label>)}
           </div>}
           <p className="-mt-2 text-xs text-muted-foreground">
             {text(
-              "Geboekte trajecten gebruiken hun eigen vertrek- en aankomstpunten. Aansluitende ritten kun je instellen bij Vervoer en navigatie. Activiteiten verschijnen alleen als kaartmarkering wanneer je daarvoor kiest; ze veranderen de routevolgorde niet.",
-              "Booked journeys use their own departure and arrival points. Configure connecting transfers under Transport and navigation. Activities appear only as map markers when you choose this; they do not change route order.",
+              "Geboekte trajecten gebruiken hun eigen vertrek- en aankomstpunten. Automatische aansluitingen kiezen een nabijgelegen routepunt. Kies hierboven zelf een genummerd routepunt voor een andere aansluiting of een specifiek bezoek aan dezelfde plaats. Vervoerskeuzes staan bij Vervoer en navigatie. Activiteiten veranderen de routevolgorde niet.",
+              "Booked journeys use their own departure and arrival points. Automatic transfers choose a nearby route stop. Select a numbered stop above for a different transfer or a specific visit to the same place. Transport choices are under Transport and navigation. Activities do not change route order.",
             )}
           </p>
           <div className="grid items-end gap-3 md:grid-cols-5">
@@ -928,9 +981,10 @@ export function TripBookings({
               </span>
             </span>
           </label>
+          {missingField && <p id={errorId} role="alert" className="text-sm text-destructive">{missingMessage}</p>}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
           <Button
-            className="mt-2"
-            disabled={!editable || saving || loadingFlight}
+            disabled={!editable || saving || loadingFlight || locationEditing}
             onClick={() => void save()}
           >
             {editingId ? (
@@ -946,17 +1000,22 @@ export function TripBookings({
               </>
             )}
           </Button>
+          <Button type="button" variant="outline" disabled={!editable || !editingId || saving || loadingFlight || locationEditing || !trip.travelItems?.some(item => item.id === editingId)} onClick={event => { event.currentTarget.focus(); setDocumentOpen(true); }}><Paperclip className="size-4"/>{text("Document toevoegen", "Add document")}</Button>
+          </div>
+          {!editingId && <p className="text-xs text-muted-foreground">{text("Sla het reisonderdeel eerst op om er een document aan toe te voegen.", "Save the travel item before adding a document.")}</p>}
+          {locationEditing && <p role="status" className="text-xs text-muted-foreground">{text("Bevestig of annuleer eerst de locatiegegevens hierboven.", "Confirm or cancel the location details above first.")}</p>}
         </fieldset>
       </CardContent>
     </Card>
   );
   return (
     <div className="space-y-4">
+      {documentBooking && <TripDocumentViewer tripId={trip.id} title={documentBooking.title} documents={(documents.data ?? []).filter(item => item.travel_item_id === documentBooking.id)} onClose={() => setDocumentBooking(undefined)}/>}
       {editingId ? (
         <Dialog
           open
           onOpenChange={(open) => {
-            if (!open && !saving && !loadingFlight) reset();
+            if (!open && !saving && !loadingFlight && !documentOpen) reset();
           }}
         >
           <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-4xl">
@@ -970,6 +1029,7 @@ export function TripBookings({
               </DialogDescription>
             </DialogHeader>
             {form}
+            {documentOpen && editingId && <TripDocumentUploadDialog key={editingId} tripId={trip.id} booking={{ id: editingId, title: draft.title }} editable={editable && Boolean(trip.travelItems?.some(item => item.id === editingId))} onClose={() => setDocumentOpen(false)}/>}
           </DialogContent>
         </Dialog>
       ) : (
@@ -1015,7 +1075,8 @@ export function TripBookings({
                     </p>
                     <p className="mt-1 break-words text-muted-foreground">
                       {item.date}
-                      {item.details?.startTime ? ` · ${item.details.startTime}` : ""}
+                      {item.type === "transport" ? (transportTimeSummary(item, text) ? ` · ${transportTimeSummary(item, text)}` : "")
+                        : item.details?.startTime ? ` · ${item.details.startTime}` : ""}
                       {item.endDate ? ` ${text("t/m", "to")} ${item.endDate}` : ""}
                       {item.bookingReference
                         ? ` · ${text("Boeking", "Booking")}: ${item.bookingReference}`
@@ -1029,6 +1090,7 @@ export function TripBookings({
                         {item.details?.seat ? ` · ${text("Zitplaats", "Seat")}: ${item.details.seat}` : ""}
                       </p>
                     )}
+                    {[item.location, item.departure, item.arrival].filter((place): place is GeoResult=>Boolean(place?.addressLine)).map((place,index)=><p key={index} className="mt-1 break-words text-xs text-muted-foreground">{place.name} · {place.addressLine}{place.city ? ` · ${place.city}` : ""}</p>)}
                     {item.type === "flight" && (
                       <div className="mt-3">
                         <FlightDisruptionCard
@@ -1041,6 +1103,7 @@ export function TripBookings({
                       </div>
                     )}
                   </div>
+                  {(documents.data ?? []).some(document => document.travel_item_id === item.id) && <Button type="button" variant="ghost" size="sm" aria-label={text(`Documenten bij ${item.title}`, `Documents for ${item.title}`)} onClick={event => { event.currentTarget.focus(); setDocumentBooking(item); }}><Paperclip className="size-4"/>{text("Documenten", "Documents")}</Button>}
                   {editable && (
                     <div className="flex shrink-0">
                       {item.type === "activity" && <Button type="button" variant="ghost" size="icon" aria-label={text("Kaartlocatie en zichtbaarheid wijzigen", "Edit map location and visibility")} title={text("Kaartlocatie", "Map location")} disabled={saving} onClick={() => edit(item)}><MapPin className="size-4" /></Button>}
@@ -1132,21 +1195,25 @@ function LocationPicker({
   value,
   onPick,
   disabled,
+  onEditingChange,
 }: {
   label: string;
   value: GeoResult | undefined;
   onPick: (location: GeoResult | undefined) => void;
   disabled: boolean;
+  onEditingChange: (editing:boolean)=>void;
 }) {
   const { locale, text } = useLocale();
+  const [editingLocation, setEditingLocation] = useState(false);
   return (
     <div className="space-y-1">
       <p className="text-xs text-muted-foreground">{label}</p>
-      {value ? (
-        <div className="flex h-10 items-center gap-2 rounded-md border border-input bg-muted/40 px-3 text-sm">
+      {value && !editingLocation ? (
+        <div className="flex min-h-10 items-center gap-2 rounded-md border border-input bg-muted/40 px-3 text-sm">
           <MapPin className="size-4 shrink-0" />
-          <span className="min-w-0 flex-1 truncate">
+          <span className="min-w-0 flex-1 break-words">
             {value.name}, {localizeCountry(value.country, locale)}
+            {value.addressLine && <span className="block text-xs text-muted-foreground">{value.addressLine}</span>}
           </span>
           <Button
             type="button"
@@ -1154,14 +1221,15 @@ function LocationPicker({
             size="sm"
             disabled={disabled}
             aria-label={`${label} ${text("wijzigen", "edit")}`}
-            onClick={() => onPick(undefined)}
+            onClick={() => {setEditingLocation(true);onEditingChange(true);}}
           >
             {text("Wijzigen", "Edit")}
           </Button>
         </div>
       ) : (
-        <PlaceSearch onPick={onPick} disabled={disabled} />
+        <PlaceSearch key={value ? "edit" : "new"} initialLocation={value} onEditingChange={onEditingChange} onCancel={() => {setEditingLocation(false);onEditingChange(false);}} onPick={location => {onPick(location);setEditingLocation(false);onEditingChange(false);}} disabled={disabled} />
       )}
+      {value && editingLocation && <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={()=>{onPick(undefined);setEditingLocation(false);onEditingChange(false);}}>{text("Locatie verwijderen", "Remove location")}</Button>}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
   CircleDollarSign,
   Clock3,
   MapPin,
+  Paperclip,
   Plane,
   Pencil,
   Ticket,
@@ -29,7 +30,9 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { useLocale } from "@/lib/locale";
-import { buildTripTimelineEntries, tripTimelineDays, tripDayOverview, type TimelineEntry } from "@/lib/trip-timeline";
+import { useTripDocuments } from "@/components/useTripDocuments";
+import { TripDocumentViewer } from "@/components/TripDocumentViewer";
+import { buildTripTimelineEntries, tripTimelineDays, tripDayOverview, transportTimeSummary, type TimelineEntry } from "@/lib/trip-timeline";
 
 type TimelineFilter = "all" | TimelineEntry["kind"];
 
@@ -56,6 +59,7 @@ function detailFor(item: TravelItem, text: (nl: string, en: string) => string) {
       ? `${item.departure.name} \u2192 ${item.arrival.name}`
       : item.location?.name;
   const values = [
+    transportTimeSummary(item, text),
     location,
     item.provider,
     item.bookingReference ? `${text("Boeking", "Booking")} ${item.bookingReference}` : undefined,
@@ -92,6 +96,8 @@ export function TripTimeline({
   const [selectedDay, setSelectedDay] = useState(trip.start);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<ItineraryItem | null>(null);
+  const documents = useTripDocuments(trip.id);
+  const [documentBooking, setDocumentBooking] = useState<TravelItem>();
   const entries = useMemo(() => buildTripTimelineEntries(trip, text), [text, trip]);
   const dates = useMemo(() => tripTimelineDays(trip, entries), [entries, trip]);
   const focusedDay = dates.includes(selectedDay) ? selectedDay : dates[0] || trip.start;
@@ -174,6 +180,8 @@ export function TripTimeline({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {documents.isError && <p role="status" className="text-xs text-muted-foreground">{text("Documenten konden niet worden geladen.", "Documents could not be loaded.")} <button type="button" className="underline" onClick={() => void documents.refetch()}>{text("Opnieuw proberen", "Retry")}</button></p>}
+        {documentBooking && <TripDocumentViewer tripId={trip.id} title={documentBooking.title} documents={(documents.data ?? []).filter(item => item.travel_item_id === documentBooking.id)} onClose={() => setDocumentBooking(undefined)}/>}
         <Dialog
           open={Boolean(editing)}
           onOpenChange={(open) => {
@@ -352,13 +360,14 @@ export function TripTimeline({
                       {dayEntries.map((entry) => {
                         const Icon = icons[entry.kind];
                         const amount = !entry.phase || entry.phase === "start" ? entry.item?.amount : undefined;
+                        const linkedDocuments = entry.item ? (documents.data ?? []).filter(item => item.travel_item_id === entry.item!.id) : [];
                         return (
                           <article
                             key={entry.id}
                             className="relative rounded-xl border border-border bg-card p-3 shadow-sm"
                           >
-                            <span className="absolute -left-[1.9rem] top-4 grid size-6 place-items-center rounded-full border border-border bg-background text-primary">
-                              <Icon className="size-3.5" />
+                            <span className="absolute left-[calc(-1.25rem-1.5px)] top-4 grid size-6 -translate-x-1/2 place-items-center rounded-full border border-border bg-background text-primary">
+                              <Icon className="block size-3.5" aria-hidden="true" />
                             </span>
                             <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
                               <div className="min-w-0 flex-1 basis-60">
@@ -370,7 +379,7 @@ export function TripTimeline({
                                 )}
                               </div>
                               {entry.time && (
-                                <Badge variant="outline">
+                                <Badge variant="outline" className="gap-1">
                                   <Clock3 className="size-3" /> {entry.time}
                                 </Badge>
                               )}
@@ -396,6 +405,7 @@ export function TripTimeline({
                                   <Pencil className="size-4" /> {text("Wijzigen", "Edit")}
                                 </Button>
                               )}
+                              {entry.item && linkedDocuments.length > 0 && <Button type="button" size="sm" variant="ghost" aria-label={text(`Documenten bij ${entry.title} (${linkedDocuments.length})`, `Documents for ${entry.title} (${linkedDocuments.length})`)} onClick={event => { event.currentTarget.focus(); setDocumentBooking(entry.item); }}><Paperclip className="size-4"/>{text("Documenten", "Documents")} <span>{linkedDocuments.length}</span></Button>}
                               {entry.manual && editable && (
                                 <Button
                                   size="icon"

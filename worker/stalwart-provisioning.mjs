@@ -38,11 +38,13 @@ export function accountProperties(mailbox, domainId, password) {
 export function decryptMailboxPassword(ciphertext, base64Key) {
   const key = Buffer.from(String(base64Key || ""), "base64");
   const [version, iv, tag, encrypted] = String(ciphertext || "").split(".");
+  if (!/^v1\.[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]+$/.test(String(ciphertext || ""))) throw new Error("ENCRYPTED_SECRET_INVALID");
+  if (Buffer.from(tag, "base64url").toString("base64url") !== tag || Buffer.from(encrypted, "base64url").toString("base64url") !== encrypted) throw new Error("ENCRYPTED_SECRET_INVALID");
   if (key.length !== 32 || version !== "v1" || !iv || !tag || !encrypted)
     throw Object.assign(new Error("MAILBOX_CREDENTIAL_INVALID"), {
       code: "MAILBOX_CREDENTIAL_INVALID",
     });
-  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "base64url"));
+  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "base64url"), { authTagLength: 16 });
   decipher.setAuthTag(Buffer.from(tag, "base64url"));
   return Buffer.concat([
     decipher.update(Buffer.from(encrypted, "base64url")),
@@ -50,12 +52,13 @@ export function decryptMailboxPassword(ciphertext, base64Key) {
   ]).toString("utf8");
 }
 
-async function call(config, method, arguments_, callId) {
+export async function stalwartCall(config, method, arguments_, callId) {
   const response = await fetch(stalwartJmapUrl(config.url), {
     method: "POST",
     headers: { Authorization: `Bearer ${config.token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ using, methodCalls: [[method, arguments_, callId]] }),
     signal: AbortSignal.timeout(15_000),
+    redirect: "error",
   });
   if (!response.ok)
     throw Object.assign(new Error("STALWART_HTTP_ERROR"), {
@@ -71,6 +74,8 @@ async function call(config, method, arguments_, callId) {
     });
   return result;
 }
+
+const call = stalwartCall;
 
 export function stalwartJmapUrl(baseUrl) {
   return `${String(baseUrl || "").replace(/\/$/, "")}/jmap`;

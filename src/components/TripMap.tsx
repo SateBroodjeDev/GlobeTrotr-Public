@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Stop, TravelItem } from "@/lib/types";
-import { visibleMapPoints, type TripMapFilters, groupTripMapPlaces, mapBookedRouteLegs, mapTripRouteLegs, type TripMapPoint } from "@/lib/route-map";
+import { hasMapCoordinates, visibleMapPoints, type TripMapFilters, groupTripMapPlaces, mapBookedRouteLegs, mapTripRouteLegs, type TripMapPoint } from "@/lib/route-map";
 import { useLocale } from "@/lib/locale";
 import { localizeCountry } from "@/lib/localized-values";
 
@@ -32,6 +32,7 @@ export default function TripMap({
 
   useEffect(() => {
     let cancelled = false;
+    let resizeTimer: ReturnType<typeof setTimeout> | undefined;
     (async () => {
       const L = (await import("leaflet")).default;
       if (cancelled || !ref.current) return;
@@ -77,12 +78,15 @@ export default function TripMap({
           const visit = place.stops.find(entry => entry.stop.id === activeStopId) ?? place.stops[0]!;
           const active = visit.stop.id === activeStopId;
           const size = active ? 34 : 28;
+          const numbers = active ? String(visit.index + 1) : place.stops.map(entry => entry.index + 1).join(" / ");
+          const width = Math.max(size, numbers.length * 7 + 12);
           L.marker([place.lat, place.lon], {
+            title: `${place.name} · ${locale === "en-GB" ? "Route stops" : "Routepunten"} ${numbers}`,
             icon: L.divIcon({
               className: "",
-              html: `<div style="display:grid;place-items:center;width:${size}px;height:${size}px;border-radius:999px;background:${active ? "#111827" : "oklch(0.52 0.115 var(--brand-hue))"};color:#fff;font:600 12px/1 system-ui;box-shadow:0 2px 8px rgba(0,0,0,.35)">${visit.index + 1}</div>`,
-              iconSize: [size, size],
-              iconAnchor: [size / 2, size / 2],
+              html: `<div style="display:grid;place-items:center;width:${width}px;height:${size}px;border-radius:999px;background:${active ? "#111827" : "oklch(0.52 0.115 var(--brand-hue))"};color:#fff;font:600 12px/1 system-ui;box-shadow:0 2px 8px rgba(0,0,0,.35)">${numbers}</div>`,
+              iconSize: [width, size],
+              iconAnchor: [width / 2, size / 2],
             }),
           })
             .addTo(map)
@@ -95,13 +99,16 @@ export default function TripMap({
         }
       });
       if (bounds.length) map.fitBounds(L.latLngBounds(bounds).pad(0.35), { maxZoom: 8 });
-      const activeStop = filters.route && stops.find((stop) => stop.id === activeStopId);
+      const activeStop = filters.route && stops.find((stop) => stop.id === activeStopId && hasMapCoordinates(stop));
       if (activeStop) map.setView([activeStop.lat, activeStop.lon], Math.max(map.getZoom(), 7));
-      setTimeout(() => map.invalidateSize(), 60);
+      resizeTimer = setTimeout(() => {
+        if (!cancelled && mapRef.current === map) map.invalidateSize();
+      }, 60);
     })();
 
     return () => {
       cancelled = true;
+      clearTimeout(resizeTimer);
     };
   }, [activeStopId, filters, locale, onStopSelect, points, routeItems, startDate, stops]);
 
@@ -109,13 +116,16 @@ export default function TripMap({
     return () => {
       const map = mapRef.current as any;
       if (map) {
+        // Leaflet's delayed CSS-zoom callback is not cancelled by remove().
+        // Finish it while its panes still exist; the delayed callback then exits.
+        if (map._animatingZoom) map._onZoomTransitionEnd();
         map.remove();
         mapRef.current = null;
       }
     };
   }, []);
 
-  return <div className="min-w-0 space-y-2">
+  return <div className="relative z-0 min-w-0 space-y-2">
     <fieldset className="flex flex-wrap gap-2">
       <legend className="mb-2 text-xs font-medium">{locale === "en-GB" ? "Show on map" : "Toon op kaart"}</legend>
       {([["route", "Route", "Route"], ["lodging", "Hotels", "Hotels"], ["activity", "Activiteiten", "Activities"], ["other", "Overige", "Other"]] as const).map(([key, nl, en]) => <label key={key} className={`flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border px-3 text-sm ${filters[key] ? "border-primary/30 bg-primary/10" : "bg-muted/30"}`}><input type="checkbox" checked={filters[key]} onChange={event => setFilters(current => ({ ...current, [key]: event.target.checked }))} />{locale === "en-GB" ? en : nl}</label>)}

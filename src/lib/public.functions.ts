@@ -1,3 +1,4 @@
+import { ownedTripCoverPath } from "./security-object-path";
 import { createServerFn } from "@tanstack/react-start";
 
 export type PublicStop = {
@@ -259,7 +260,7 @@ export const getPublicTrip = createServerFn({ method: "GET" })
     const publicDb = await createPublicDatabaseClient();
     const submittedPinHash = input.pin ? await hashPin(input.pin) : null;
     const { data: publicResult, error: publicError } = await publicDb.rpc(
-      "get_public_trip" as never,
+      "get_public_trip_limited" as never,
       { p_token: input.token, p_trip_id: input.tripId, p_pin_hash: submittedPinHash } as never,
     );
     if (!publicError && publicResult && typeof publicResult === "object") {
@@ -278,7 +279,7 @@ export const getPublicTrip = createServerFn({ method: "GET" })
         if (process.env["SUPABASE_SERVICE_ROLE_KEY"] && /^[0-9a-f-]{36}$/i.test(input.tripId)) {
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
           const { data: coveredTrip } = await supabaseAdmin.from("trips").select("cover_path").eq("trip_uuid", input.tripId).eq("is_public", true).eq("archived", false).maybeSingle();
-          if (coveredTrip?.cover_path) {
+          if (ownedTripCoverPath(coveredTrip?.cover_path, input.tripId)) {
             const { data: signed } = await supabaseAdmin.storage.from("trip-covers").createSignedUrl(coveredTrip.cover_path, 900);
             if (signed?.signedUrl) result.trip.coverUrl = signed.signedUrl;
           }
@@ -319,7 +320,7 @@ export const getPublicTrip = createServerFn({ method: "GET" })
     // Oude URLs hebben nog de tijdelijke tekst-ID. Houd deze bruikbaar totdat
     // de private app en JSON-cache volledig op de UUID werken.
     const { data: byLegacyId } =
-      byUuid || uuidError
+      !byUuid
         ? await db
             .from("trips")
             .select(
@@ -333,10 +334,9 @@ export const getPublicTrip = createServerFn({ method: "GET" })
         : { data: null };
     const normalizedTrip = (byUuid ?? byLegacyId) as RelationalTrip | null;
     if (normalizedTrip) {
-      if (
-        normalizedTrip.share_pin_hash &&
-        (await hashPin(input.pin ?? "")) !== normalizedTrip.share_pin_hash
-      ) {
+      // PIN authority must go through the shared DB limiter. A failed/missing
+      // RPC must never turn this service-role fallback into an unlimited oracle.
+      if (normalizedTrip.share_pin_hash) {
         return { status: "pin_required" } as PublicTripResult;
       }
       const [{ data: stops }, { data: itinerary }, { data: travelItems }] = await Promise.all([
@@ -376,35 +376,8 @@ export const getPublicTrip = createServerFn({ method: "GET" })
       return { status: "ok", trip: detail } as PublicTripResult;
     }
 
-    const row = data as Row;
-    const trip = tripsOf(row).find((t) => String(t["id"]) === input.tripId);
-    if (!trip || trip["archived"] === true) return { status: "not_found" } as PublicTripResult;
-    const pinHash = typeof trip["sharePinHash"] === "string" ? trip["sharePinHash"] : null;
-    if (pinHash && (await hashPin(input.pin ?? "")) !== pinHash) {
-      return { status: "pin_required" } as PublicTripResult;
-    }
-    const detail: PublicTripDetail = {
-      ...card(row, trip, authorName),
-      itinerary: (Array.isArray(trip["itinerary"]) ? (trip["itinerary"] as AnyTrip[]) : []).map(
-        (d) => ({
-          day: String(d["day"] ?? ""),
-          title: String(d["title"] ?? ""),
-          notes: d["notes"] ? String(d["notes"]) : undefined,
-        }),
-      ),
-      travelItems: (Array.isArray(trip["travelItems"]) ? (trip["travelItems"] as AnyTrip[]) : [])
-        .map(publicTravelItem)
-        .filter((item): item is PublicTravelItem => Boolean(item)),
-      journal: [],
-      weatherEnabled:
-        (row.data as AnyTrip | null)?.["plan"] === "pro" ||
-        (row.data as AnyTrip | null)?.["plan"] === "agency",
-    };
-    if (trip["shareFinancials"] === true) {
-      detail.budget = Number(trip["budget"] ?? 0);
-      detail.currency = "EUR";
-    }
-    return { status: "ok", trip: detail } as PublicTripResult;
+    // A stale JSON snapshot is content, never current publication/PIN authority.
+    return { status: "not_found" } as PublicTripResult;
   });
 
 export async function hashPin(pin: string) {

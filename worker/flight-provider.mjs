@@ -46,6 +46,8 @@ export async function fetchMonitoredFlight(env, flight) {
   const response = await fetch(`https://${host}/flights/number/${encodeURIComponent(flight.flight_number)}/${date}?${query}`, { headers: { "X-RapidAPI-Key": env.AERODATABOX_RAPIDAPI_KEY.trim(), "X-RapidAPI-Host": host, Accept: "application/json" }, signal: AbortSignal.timeout(15_000) });
   if (!response.ok) throw Object.assign(new Error("FLIGHT_PROVIDER_FAILED"), { code: `FLIGHT_HTTP_${response.status}` });
   const payload = await response.json();
+  if (Array.isArray(payload) && payload.length === 0)
+    throw Object.assign(new Error("FLIGHT_NOT_FOUND"), { code: "FLIGHT_NOT_FOUND" });
   const state = aeroDataBoxMonitorState(payload, flight.departure_iata);
   if (!state) throw Object.assign(new Error("FLIGHT_RESPONSE_INVALID"), { code: "FLIGHT_RESPONSE_INVALID" });
   return { provider: "aerodatabox", payload, state };

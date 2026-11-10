@@ -24,6 +24,7 @@ export type BookingHotel = {
   taxesAndFees?: number;
   photoUrl?: string;
   sourceUrl: string;
+  availability: "available" | "unknown";
 };
 
 function record(value: unknown): Record<string, any> {
@@ -46,15 +47,20 @@ function httpUrl(value: unknown) {
   }
 }
 
-function isAvailableHotel(row: Record<string, any>) {
-  const property = record(row.property);
-  const availability = record(row.availability ?? property.availability);
-  const explicit = [row.isAvailable, row.available, property.isAvailable, property.available, availability.available]
-    .find((value) => typeof value === "boolean");
-  if (explicit === false) return false;
-  if ([row.isSoldOut, row.soldOut, property.isSoldOut, property.soldOut].some((value) => value === true)) return false;
-  const status = String(availability.status ?? row.availabilityStatus ?? property.availabilityStatus ?? "").toLowerCase();
-  return !["sold_out", "soldout", "unavailable", "not_available", "closed"].includes(status);
+function hotelAvailability(row: Record<string, any>): "available" | "unavailable" | "unknown" {
+  const sources = [row, record(row.property), record(row.basicPropertyData)];
+  const availability = sources.map(source => record(source.availability));
+  const flag = (value: unknown) => value === true || value === 1 || value === "1" || value === "true"
+    ? true : value === false || value === 0 || value === "0" || value === "false" ? false : undefined;
+  const available = [...sources, ...availability].flatMap(source =>
+    [source.isAvailable, source.is_available, source.available].map(flag));
+  const sold = sources.flatMap(source => [source.isSoldOut, source.is_sold_out, source.soldOut, source.sold_out, source.soldout].map(flag));
+  const status = [...sources, ...availability].map(source => String(
+    source.availabilityStatus ?? source.availability_status ?? source.status ?? "").trim().toLowerCase().replace(/[ -]+/g, "_"));
+  const roomCounts = sources.flatMap(source => [source.availableRooms, source.available_rooms, source.roomsAvailable, source.rooms_available]);
+  if (available.includes(false) || sold.includes(true) || roomCounts.some(value => finite(value) === 0)
+    || status.some(value => ["sold_out", "soldout", "unavailable", "not_available", "closed"].includes(value))) return "unavailable";
+  return available.includes(true) || status.some(value => ["available", "bookable"].includes(value)) ? "available" : "unknown";
 }
 
 export function bookingHotelsRequest(input: BookingHotelSearchInput, host = BOOKING_HOST) {
@@ -113,7 +119,8 @@ export function parseBookingHotels(
         id = String(row.id ?? basic.id ?? row.hotel_id ?? property.id ?? `${name}:${index}`)
           .trim()
           .slice(0, 100);
-      if (!name || !id || !isAvailableHotel(row)) return [];
+      const availability = hotelAvailability(row);
+      if (!name || !id || availability === "unavailable") return [];
       const lat =
           finite(
             coordinates.latitude ??
@@ -167,6 +174,7 @@ export function parseBookingHotels(
       return [
         {
           id: `booking:${id}`,
+          availability,
           name,
           kind: String(
             basic.propertyType ??
@@ -202,4 +210,22 @@ export function parseBookingHotels(
       ];
     })
     .slice(0, 20);
+}
+
+/** An authoritative empty search must not be replaced with unverified map listings. */
+export async function resolveHotelSearch<T>(booking: () => Promise<T[] | undefined>, map: () => Promise<T[]>) {
+  let bookingUnavailable = false;
+  let bookingStatus: "ok" | "no_results" | "timeout" | "unavailable" = "ok";
+  try {
+    const results = await booking();
+    if (results !== undefined) return { results, provider: "booking" as const, bookingUnavailable,
+      bookingStatus: results.length ? "ok" as const : "no_results" as const };
+    bookingStatus = "unavailable";
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "";
+    if (["BOOKING_HOTEL_AUTH", "BOOKING_HOTEL_QUOTA", "BOOKING_HOTEL_INVALID_INPUT"].includes(code)) throw error;
+    bookingUnavailable = true;
+    bookingStatus = code === "BOOKING_HOTEL_TIMEOUT" ? "timeout" : "unavailable";
+  }
+  return { results: await map(), provider: "openstreetmap" as const, bookingUnavailable, bookingStatus };
 }

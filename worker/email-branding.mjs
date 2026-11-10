@@ -24,15 +24,15 @@ export function emailBranding(payload, locale = "en") {
   const hue = Number(source.accentHue);
   const accent = Number.isFinite(hue)
     ? `hsl(${Math.min(360, Math.max(0, hue))} 70% 34%)`
-    : "#168b78";
+    : "#117A65";
 
   if (!agency) {
     return {
       agency: false,
       name: "GlobeTrotr",
-      tagline: "Plan every trip. Track every euro.",
+      tagline: locale === "nl" ? "Jullie hele rondreis, samen geregeld op één plek." : "Your whole trip, planned together in one place.",
       contactEmail: "",
-      logoUrl: "https://globetrotr.nl/assets/email/logo.png",
+      logoUrl: "https://globetrotr.nl/assets/email/logo.png?v=20261019",
       accent,
       serviceNote:
         locale === "en"

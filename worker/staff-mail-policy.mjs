@@ -1,4 +1,6 @@
 export function importMailboxReady(box) {
+  if (box.hosting_mode === "self_hosted" && box.provisioning_status !== "ready") return false;
+  if (box.provisioning_app_password && !box.managed_import_credential_id) return false;
   return !box.provisioning_create_only ||
     Boolean(box.managed_import_credential_id && box.provisioning_status === "ready");
 }

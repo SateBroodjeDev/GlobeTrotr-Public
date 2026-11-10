@@ -1,3 +1,5 @@
+import { activationSecret, signingConfigured } from "@/lib/self-hosted-license-core";
+import { readBoundedJson } from "@/lib/bounded-json";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   issueLease,
@@ -23,7 +25,7 @@ export const Route = createFileRoute("/api/licensing/v1/activate")({
             key = auth.startsWith("Bearer ") ? auth.slice(7) : "";
           if (!key.startsWith("gt_sh_") || key.length > 200)
             return json({ error: "invalid_license" }, 401);
-          const body = (await request.json()) as {
+          const body = (await readBoundedJson(request, 8192)) as {
             domain?: string;
             environment?: string;
             version?: string;
@@ -41,79 +43,23 @@ export const Route = createFileRoute("/api/licensing/v1/activate")({
             String(body.idempotencyKey).length > 100
           )
             return json({ error: "invalid_request" }, 400);
+          if (!signingConfigured()) return json({ error: "activation_unavailable" }, 503);
           const license = await licenseByRawKey(key);
           if (!license || !usable(license)) return json({ error: "license_unavailable" }, 403);
-          const db = supabaseAdmin as any,
-            existingEvent = await db
-              .from("self_hosted_license_events")
-              .select("installation_id")
-              .eq("idempotency_key", body.idempotencyKey)
-              .eq("license_id", license.id)
-              .maybeSingle();
-          if (existingEvent.data?.installation_id) {
-            const existing = await db
-              .from("self_hosted_installations")
-              .select("*")
-              .eq("id", existingEvent.data.installation_id)
-              .is("revoked_at", null)
-              .maybeSingle();
-            if (existing.data) {
-              const renewedSecret = token("gti_");
-              await db
-                .from("self_hosted_installations")
-                .update({
-                  secret_hash: sha256(renewedSecret),
-                  updated_at: new Date().toISOString(),
-                })
-                .eq("id", existing.data.id);
-              return json({
-                ...(await issueLease(license, existing.data)),
-                installationId: existing.data.id,
-                installationKey: existing.data.installation_key,
-                installationSecret: renewedSecret,
-              });
-            }
-          }
-          const count = await db
-              .from("self_hosted_installations")
-              .select("id", { count: "exact", head: true })
-              .eq("license_id", license.id)
-              .eq("environment", environment)
-              .is("revoked_at", null),
-            limit =
-              environment === "test" ? license.test_installation_limit : license.installation_limit;
-          if ((count.count ?? 0) >= limit) return json({ error: "installation_limit" }, 409);
-          const secret = token("gti_"),
-            installationKey = token("inst_", 24),
-            created = await db
-              .from("self_hosted_installations")
-              .insert({
-                license_id: license.id,
-                installation_key: installationKey,
-                environment,
-                domain,
-                version,
-                secret_hash: sha256(secret),
-              })
-              .select("*")
-              .single();
-          if (created.error) return json({ error: "activation_failed" }, 409);
-          await db.from("self_hosted_license_events").insert({
-            license_id: license.id,
-            installation_id: created.data.id,
-            event_type: "installation.activated",
-            idempotency_key: String(body.idempotencyKey),
-            context: { domain, environment, version },
+          const db = supabaseAdmin as any;
+          const secret = activationSecret(key, String(body.idempotencyKey), domain, environment, version);
+          const activated = await db.rpc("activate_self_hosted_installation", {
+            p_license: license.id, p_key_hash: sha256(key),
+            p_request_hash: sha256(JSON.stringify([license.id, String(body.idempotencyKey)])),
+            p_domain: domain, p_environment: environment, p_version: version,
+            p_installation_key: token("inst_", 24), p_secret_hash: sha256(secret),
           });
-          return json(
-            {
-              ...(await issueLease(license, created.data)),
-              installationId: created.data.id,
-              installationKey,
-              installationSecret: secret,
-            },
-            201,
-          );
+          if (activated.error || !activated.data?.installation || !activated.data?.license)
+            return json({ error: activated.error?.message?.includes("INSTALLATION_LIMIT") ? "installation_limit" : "activation_unavailable" }, 409);
+          const row = activated.data.installation;
+          return json({ ...(await issueLease(activated.data.license, row)),
+            installationId: row.id, installationKey: row.installation_key, installationSecret: secret,
+          }, activated.data.replayed ? 200 : 201);
         } catch {
           return json({ error: "invalid_request" }, 400);
         }

@@ -10,7 +10,7 @@ export const getRates = createServerFn({ method: "GET" }).handler(async (): Prom
     .filter((c) => c !== "EUR")
     .join(",");
   try {
-    const res = await fetch(`https://api.frankfurter.app/latest?from=EUR&to=${symbols}`);
+    const res = await fetch(`https://api.frankfurter.dev/v1/latest?base=EUR&symbols=${symbols}`);
     if (!res.ok) throw new Error(String(res.status));
     const json = (await res.json()) as { rates: Record<string, number> };
     return { ...FALLBACK_RATES, ...json.rates, EUR: 1 };

@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { consumeProviderQuota } from "@/lib/provider-quota.server";
 import { effectiveAgencyPermissions, type AgencyPermissionMap } from "@/lib/agency-permissions";
 import { proposeRouteOrder } from "@/lib/route-optimizer";
-import { mapTripRouteLegs, routeLegId } from "@/lib/route-map";
+import { distinctRouteLegsForCalculation, mapTripRouteLegs, routeLegId } from "@/lib/route-map";
 import {
   isRoadRouteStopId, lockRoadGroupEndpoints, mergeRoadRoutes, normalizeRoadRoute,
   openRouteServiceBody, roadProposal, roadRouteGroups, roadRoutingEndpoint, roadRoutingProviderErrorCode,
@@ -119,7 +119,7 @@ export const calculateTripRoadRoutes = createServerFn({ method: "POST" })
     const groups: Array<{ stops: Stop[]; mode: RoadTravelMode }> = [];
     const skippedLegs: TripRoadRoutes["skippedLegs"] = [];
     let activeGroup: (typeof groups)[number] | undefined;
-    for (const leg of legs) {
+    for (const leg of distinctRouteLegsForCalculation(legs)) {
       const mode = roadModeForTransport(leg.mode);
       if (!mode) { activeGroup = undefined; skippedLegs.push({ fromStopId: leg.from.id, toStopId: leg.to.id, ...(leg.mode ? { mode: leg.mode } : {}), reason: leg.mode ? "non_road" : "unconfigured" }); continue; }
       if (activeGroup?.mode === mode && activeGroup.stops.at(-1)?.id === leg.from.id) activeGroup.stops.push(leg.to);

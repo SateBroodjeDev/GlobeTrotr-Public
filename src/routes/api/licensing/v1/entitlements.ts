@@ -1,3 +1,4 @@
+import { readBoundedJson } from "@/lib/bounded-json";
 import { createFileRoute } from "@tanstack/react-router";
 import { installationByCredentials, usable } from "@/lib/self-hosted-license.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -13,7 +14,7 @@ export const Route = createFileRoute("/api/licensing/v1/entitlements")({
           if (Number(request.headers.get("content-length") || 0) > 2048)
             return respond({ error: "invalid_request" }, 400);
           const secret = (request.headers.get("authorization") || "").replace(/^Bearer /, ""),
-            body = (await request.json()) as { installationKey?: string };
+            body = (await readBoundedJson(request, 2048)) as { installationKey?: string };
           const match = await installationByCredentials(secret, String(body.installationKey || ""));
           if (!match) return respond({ error: "invalid_installation" }, 401);
           if (!usable(match.license)) return respond({ error: "license_unavailable" }, 403);

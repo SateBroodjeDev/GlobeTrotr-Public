@@ -1,4 +1,4 @@
-import { createHash, createPrivateKey, randomBytes, sign } from "node:crypto";
+import { createHash, createHmac, createPrivateKey, randomBytes, sign } from "node:crypto";
 
 export const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 export const token = (prefix: string, bytes = 32) =>
@@ -6,7 +6,10 @@ export const token = (prefix: string, bytes = 32) =>
 const encoded = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
 
 export function signingConfigured() {
-  return Boolean(process.env.SELF_HOSTED_LICENSE_SIGNING_PRIVATE_KEY?.trim());
+  try {
+    const configured = process.env.SELF_HOSTED_LICENSE_SIGNING_PRIVATE_KEY?.trim();
+    return Boolean(configured && createPrivateKey(Buffer.from(configured, "base64").toString("utf8")).asymmetricKeyType === "ed25519");
+  } catch { return false; }
 }
 
 export function signedLease(payload: Record<string, unknown>) {
@@ -28,4 +31,9 @@ export function usable(license: any) {
   )
     return false;
   return true;
+}
+
+/** ACK-loss retry returns the same secret, never a new secret for an old response. */
+export function activationSecret(rawKey: string, requestKey: string, domain: string, environment: string, version: string) {
+ return "gti_" + createHmac("sha256", rawKey).update(JSON.stringify(["activation-v1", requestKey, domain, environment, version])).digest("base64url");
 }

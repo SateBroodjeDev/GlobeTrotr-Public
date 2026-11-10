@@ -1,3 +1,5 @@
+import { receiptRequest, receiptAuthorized, maintenanceHold, maintenanceValidation, workerExecutionMode } from "./mail-receipt-gateway.mjs";
+import { beginDelivery, finishDelivery, requireClaim } from "./delivery-protocol.mjs";
 import { createServer } from "node:http";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import webPush from "web-push";
@@ -5,11 +7,16 @@ import { scanBuffer } from "./clamav.mjs";
 import { buildLiveCalendar } from "./live-calendar.mjs";
 import { trustedPaddleCustomData } from "./paddle-binding.mjs";
 import { agencyDomainFilter } from "./agency-domain.mjs";
+import { agencyAuthRedirectConfig, syncAgencyAuthRedirects } from "./agency-auth-redirects.mjs";
+import { domainAutomationConfig, processAgencyDomainJob, domainProof, domainProofPath } from "./agency-domain-automation.mjs";
 import { publicAgencyLogoUrl } from "./email-branding.mjs";
 import { publicHttpsAgent } from "./public-network.mjs";
 import { mayDeliverOptionalMail } from "./mail-privacy.mjs";
 import { createStaffProvisioner, processStaffIdentity } from "./staff-provisioning.mjs";
+import { provisionSharedMailbox } from "./shared-mailbox-provisioning.mjs";
 import { fetchMonitoredFlight, flightProviderConfiguration } from "./flight-provider.mjs";
+import { createFlightHealth } from "./flight-health.mjs";
+import { createQueuePolling } from "./queue-polling.mjs";
 import {
   alertConfiguration,
   createAlertSubscription,
@@ -28,6 +35,17 @@ import {
 } from "./stalwart-provisioning.mjs";
 
 const env = process.env;
+const v1MaintenanceHold = maintenanceHold(env);
+const v1MaintenanceValidate = maintenanceValidation(env);
+let effectiveWorkerMode = "hold";
+const domainAutomation = domainAutomationConfig(env);
+let domainJobPromise = null;
+let authRedirectPromise = null;
+let lastAuthRedirectAttempt = 0;
+// A bad optional management config must never take mail/worker health down.
+let authRedirectConfig = { enabled: false };
+try { authRedirectConfig = agencyAuthRedirectConfig(env); }
+catch { console.error(JSON.stringify({ event: "agency.auth_redirect_config_invalid", errorCode: "AGENCY_AUTH_CONFIG_INVALID" })); }
 const supabaseUrl = required("SUPABASE_URL").replace(/\/$/, "");
 const serviceKey = required("SUPABASE_SERVICE_ROLE_KEY");
 // Opaque Supabase secret keys belong only in apikey; legacy service_role JWTs
@@ -37,6 +55,9 @@ const serviceAuthHeaders = {
   ...(serviceKey.startsWith("sb_secret_") ? {} : { Authorization: `Bearer ${serviceKey}` }),
 };
 const pollMs = boundedNumber(env.WORKER_POLL_MS, 5_000, 1_000, 60_000);
+const idlePollMaxMs = boundedNumber(env.WORKER_IDLE_POLL_MAX_MS,
+  Math.max(pollMs, Math.min(15_000, pollMs * 3)), pollMs, 60_000);
+const queuePolling = createQueuePolling({ baseMs: pollMs, maxIdleMs: idlePollMaxMs });
 const batchSize = boundedNumber(env.WORKER_BATCH_SIZE, 20, 1, 100);
 const healthPort = boundedNumber(env.WORKER_HEALTH_PORT, 9091, 1, 65_535);
 let stopping = false;
@@ -55,6 +76,7 @@ let lastFlightMonitorAt = 0;
 let lastFlightAlertSyncAt = 0;
 let flightAlertBalance = null;
 let flightAlertBalanceCheckedAt = null;
+const flightHealth = createFlightHealth();
 const tlsChecks = new Map();
 
 async function activeAgencyWorkspaceForDomain(domain) {
@@ -255,6 +277,7 @@ async function pollJobs() {
       });
     }
   }
+  return jobs?.length;
 }
 
 async function pollMail() {
@@ -265,17 +288,18 @@ async function pollMail() {
   for (const message of messages ?? []) {
     try {
       if (!await mayDeliverOptionalMail(message, restSingle)) {
-        await updateOutbox(message.id, "cancelled", "PRIVACY_CHOICE_CHANGED");
+        await updateOutbox(message, "cancelled", "PRIVACY_CHOICE_CHANGED");
         continue;
       }
       const smtp = await agencySmtpForMessage(message);
         const authPayload = message.template_key === "auth"
           ? await rpc("prepare_auth_email", { p_id: message.id }) : message.payload;
         if (message.template_key === "auth" && !authPayload) {
-          await updateOutbox(message.id, "cancelled", "AUTH_EMAIL_EXPIRED_OR_REVOKED");
+          await updateOutbox(message, "cancelled", "AUTH_EMAIL_EXPIRED_OR_REVOKED");
           continue;
         }
         const payload = agencyMailPayload(authPayload);
+      await beginDelivery(rpc, "email", message);
       const response = await fetch(relayUrl, {
         method: "POST",
         headers: {
@@ -285,6 +309,7 @@ async function pollMail() {
         },
         body: JSON.stringify({
           id: message.id,
+          claimToken: requireClaim(message),
           to: message.recipient_email,
           locale: message.locale,
           templateKey: message.template_key,
@@ -294,11 +319,11 @@ async function pollMail() {
         signal: AbortSignal.timeout(20_000),
       });
       if (!response.ok) throw await relayFailure(response);
-      await updateOutbox(message.id, "sent", null);
+      await updateOutbox(message, "sent", null);
       log("info", "mail.sent", { messageId: message.id, templateKey: message.template_key });
     } catch (error) {
       const code = String(error?.code ?? "MAIL_RELAY_FAILED").slice(0, 80);
-      await updateOutbox(message.id, "failed", code);
+      await updateOutbox(message, "failed", code);
       log("error", "mail.failed", {
         messageId: message.id,
         templateKey: message.template_key,
@@ -341,6 +366,18 @@ async function agencySmtpForMessage(message) {
   };
 }
 
+async function pushSubscriptionForMessage(message) {
+  // The outbox stores notification_id, not an actor. Resolve the canonical
+  // notification owner before reading subscription secrets.
+  const notification = await restSingle(
+    `notifications?id=eq.${encodeURIComponent(message.notification_id)}&select=user_id`,
+  );
+  if (!notification?.user_id) return null;
+  return restSingle(
+    `web_push_subscriptions?id=eq.${encodeURIComponent(message.subscription_id)}&user_id=eq.${encodeURIComponent(notification.user_id)}&revoked_at=is.null&select=endpoint,p256dh,auth_secret,user_id`,
+  );
+}
+
 async function pollWebPush() {
   const publicKey = env.VAPID_PUBLIC_KEY?.trim(),
     privateKey = env.VAPID_PRIVATE_KEY?.trim(),
@@ -351,9 +388,7 @@ async function pollWebPush() {
   for (const message of messages ?? []) {
     let gone = false;
     try {
-      const subscription = await restSingle(
-        `web_push_subscriptions?id=eq.${encodeURIComponent(message.subscription_id)}&revoked_at=is.null&select=endpoint,p256dh,auth_secret`,
-      );
+      const subscription = await pushSubscriptionForMessage(message);
       if (!subscription?.endpoint)
         throw Object.assign(new Error("PUSH_SUBSCRIPTION_GONE"), {
           code: "PUSH_SUBSCRIPTION_GONE",
@@ -361,23 +396,19 @@ async function pollWebPush() {
         });
       const agent = await publicHttpsAgent(subscription.endpoint);
       try {
+        await beginDelivery(rpc, "push", message);
         await webPush.sendNotification(
           {
             endpoint: subscription.endpoint,
             keys: { p256dh: subscription.p256dh, auth: subscription.auth_secret },
           },
-          JSON.stringify(message.payload),
+          JSON.stringify({ ...message.payload, accountId: subscription.user_id }),
           { TTL: 3600, urgency: "normal", timeout: 15_000, agent },
         );
       } finally {
         agent.destroy();
       }
-      await rpc("complete_web_push_outbox", {
-        p_id: message.id,
-        p_succeeded: true,
-        p_error_code: null,
-        p_gone: false,
-      });
+      await finishDelivery(rpc, "push", message, "sent");
       log("info", "push.sent", { messageId: message.id });
     } catch (error) {
       const status = Number(error?.statusCode || 0);
@@ -387,12 +418,7 @@ async function pollWebPush() {
         : status
           ? `PUSH_HTTP_${status}`
           : String(error?.code || "PUSH_DELIVERY_FAILED").slice(0, 80);
-      await rpc("complete_web_push_outbox", {
-        p_id: message.id,
-        p_succeeded: false,
-        p_error_code: code,
-        p_gone: gone,
-      });
+      await finishDelivery(rpc, "push", message, gone ? "cancelled" : "failed", code, gone);
       log("error", "push.failed", { messageId: message.id, errorCode: code, gone });
     }
   }
@@ -429,8 +455,10 @@ async function pollFlightMonitors() {
   if (!flightProviderConfiguration(env).configured) return;
   const flights = await rpc("claim_due_flight_monitors", { p_limit: Math.min(batchSize, 20) });
   for (const flight of flights ?? []) {
+    let fetched;
     try {
-      const fetched = await fetchMonitoredFlight(env, flight);
+      fetched = await fetchMonitoredFlight(env, flight);
+      flightHealth.lookup(fetched.provider, true);
       const result = await rpc("record_flight_monitor_result", {
         p_trip: flight.trip_uuid,
         p_item: flight.travel_item_id,
@@ -444,6 +472,8 @@ async function pollFlightMonitors() {
         provider: fetched.provider,
       });
     } catch (error) {
+      // A later persistence failure is not a provider failure.
+      if (!fetched) flightHealth.lookupFailure(flightProviderConfiguration(env).provider, error);
       const code = String(
         error?.name === "TimeoutError" ? "FLIGHT_TIMEOUT" : error?.code || "FLIGHT_PROVIDER_FAILED",
       ).slice(0, 80);
@@ -493,11 +523,13 @@ async function syncFlightAlertSubscriptions() {
   if (!configuration.configured) return;
   try {
     const balance = await fetchAlertBalance(env);
+    flightHealth.balance(balance !== null);
     if (balance !== null) {
       flightAlertBalance = balance;
       flightAlertBalanceCheckedAt = new Date().toISOString();
     }
   } catch (error) {
+    flightHealth.balance(false);
     log("error", "flight.alert_balance_failed", { errorCode: String(error?.code || "AERO_ALERT_BALANCE_FAILED") });
   }
   const targets = new Set((await rpc("list_aerodatabox_alert_targets")).map((row) => row.flight_number));
@@ -553,6 +585,26 @@ async function pollMailboxProvisioning() {
   const mailboxes = await rpc("claim_mailbox_provisioning", { p_limit: Math.min(batchSize, 20) });
   for (const mailbox of mailboxes ?? []) {
     try {
+      const lease = mailbox.provisioning_token;
+      const config = { url, token, domainId, credentialKey: env.MAILBOX_CREDENTIALS_KEY };
+      const guard = async () => {
+        if (lease && await rpc("guard_mailbox_provisioning_claim", { p_mailbox: mailbox.id, p_token: lease }) !== true)
+          throw Object.assign(new Error("MAIL_PROVISIONING_STALE"), { code: "MAIL_PROVISIONING_STALE" });
+      };
+      if (mailbox.provisioning_app_password) {
+        const result = await provisionSharedMailbox(config, mailbox, guard);
+        let completed;
+        try {
+          completed = mailbox.active
+            ? await rpc("complete_shared_mailbox_provisioning", { p_mailbox_id: mailbox.id, p_token: lease,
+              p_account_id: result.accountId, p_credential_id: result.credentialId, p_ciphertext: result.ciphertext })
+            : await rpc("complete_mailbox_provisioning_claim", { p_mailbox_id: mailbox.id, p_token: lease,
+              p_succeeded: true, p_account_id: result.accountId, p_error_code: null });
+        } catch { throw Object.assign(new Error("SHARED_MAIL_COMMIT_FAILED"), { code: "SHARED_MAIL_COMMIT_FAILED" }); }
+        if (completed !== true) continue;
+        log("info", "mailbox.provisioned", { mailboxId: mailbox.id, mailboxType: mailbox.mailbox_type });
+        continue;
+      }
       if (mailbox.active && !mailbox.imap_password_ciphertext)
         throw Object.assign(new Error("MAILBOX_PASSWORD_MISSING"), {
           code: "MAILBOX_PASSWORD_MISSING",
@@ -561,7 +613,6 @@ async function pollMailboxProvisioning() {
         mailbox.imap_password_ciphertext,
         env.MAILBOX_CREDENTIALS_KEY,
       ) : "";
-      const lease = mailbox.provisioning_token;
       const accountId = await provisionMailbox({ url, token, domainId, credentialKey:env.MAILBOX_CREDENTIALS_KEY }, mailbox, password,
         async()=>{if(lease && await rpc("guard_mailbox_provisioning_claim",{p_mailbox:mailbox.id,p_token:lease})!==true)
           throw Object.assign(new Error("STAFF_MAIL_JOB_STALE"),{code:"STAFF_MAIL_JOB_STALE"});});
@@ -589,6 +640,7 @@ async function pollMailboxProvisioning() {
       log("error", "mailbox.provisioning_failed", { mailboxId: mailbox.id, errorCode: code });
     }
   }
+  return mailboxes?.length;
 }
 
 async function pollStaffIdentities() {
@@ -597,9 +649,10 @@ async function pollStaffIdentities() {
   if (!token) { log("error", "staff.configuration_missing", { errorCode: "STAFF_PROVIDER_CONFIGURATION_REQUIRED" }); return; }
   try {
     const [job] = await rpc("claim_staff_identity") || [];
-    if (!job) return;
+    if (!job) return 0;
     const result = await processStaffIdentity(job, createStaffProvisioner(token, fetch, {checkApplications:env.STAFF_MAIL_SETUP_ENABLED === "true"}), rpc);
     log(result.ok ? "info" : "error", "staff.identity_result", { userId: job.user_id, errorCode: result.code || null });
+    return 1;
   } catch {
     // A provider outage must not stop ordinary mail, health or flight polling.
     log("error", "staff.identity_poll_failed", { errorCode: "STAFF_QUEUE_UNAVAILABLE" });
@@ -635,6 +688,34 @@ async function pollMailboxDeletions() {
       log("error", "mailbox.delete_failed", { mailboxId: job.mailbox_id, errorCode: code });
     }
   }
+  return jobs?.length;
+}
+
+async function authorizedCorporateMailbox(userId, mailboxId, send = false) {
+  if (await rpc("check_corporate_mail_actor", { p_actor: userId, p_mailbox: mailboxId, p_send: send }) !== true)
+    throw Object.assign(new Error("MAILBOX_ACCESS_REVOKED"), { code: "MAILBOX_ACCESS_REVOKED" });
+  const admin = await restSingle(`platform_admins?user_id=eq.${encodeURIComponent(userId)}&active=eq.true&select=role,permissions`);
+  if (!admin || (admin.role !== "owner" && admin.permissions?.mail !== true))
+    throw Object.assign(new Error("MAILBOX_ACCESS_REVOKED"), { code: "MAILBOX_ACCESS_REVOKED" });
+  const mailbox = await restSingle(`corporate_mailboxes?id=eq.${encodeURIComponent(mailboxId)}&active=eq.true&select=id,owner_user_id,address,display_name`);
+  if (!mailbox) throw Object.assign(new Error("MAILBOX_NOT_FOUND"), { code: "MAILBOX_NOT_FOUND" });
+  if (mailbox.owner_user_id !== userId) {
+    const member = await restSingle(`corporate_mailbox_members?mailbox_id=eq.${encodeURIComponent(mailboxId)}&user_id=eq.${encodeURIComponent(userId)}&select=permission`);
+    if (!member || !(send ? ["reply", "manage"] : ["read", "reply", "manage"]).includes(member.permission))
+      throw Object.assign(new Error("MAILBOX_ACCESS_REVOKED"), { code: "MAILBOX_ACCESS_REVOKED" });
+  }
+  return mailbox;
+}
+
+async function authorizedCorporateReplyParent(message) {
+  if (!message.in_reply_to_message_id) return null;
+  const path = `corporate_mail_messages?id=eq.${encodeURIComponent(message.in_reply_to_message_id)}`;
+  const parent = await restSingle(`${path}&select=mailbox_id`);
+  if (!parent?.mailbox_id) throw Object.assign(new Error("INVALID_REPLY_PARENT"), { code: "INVALID_REPLY_PARENT" });
+  await authorizedCorporateMailbox(message.created_by, parent.mailbox_id);
+  const headers = await restSingle(`${path}&mailbox_id=eq.${encodeURIComponent(parent.mailbox_id)}&select=provider_message_id,thread_key`);
+  if (!headers) throw Object.assign(new Error("INVALID_REPLY_PARENT"), { code: "INVALID_REPLY_PARENT" });
+  return headers;
 }
 
 async function pollCorporateMail() {
@@ -644,16 +725,8 @@ async function pollCorporateMail() {
   const messages = await rpc("claim_corporate_mail_queue", { p_limit: Math.min(batchSize, 50) });
   for (const message of messages ?? []) {
     try {
-      const mailbox = await restSingle(
-        `corporate_mailboxes?id=eq.${encodeURIComponent(message.mailbox_id)}&select=address,display_name`,
-      );
-      if (!mailbox?.address)
-        throw Object.assign(new Error("MAILBOX_NOT_FOUND"), { code: "MAILBOX_NOT_FOUND" });
-      const parent = message.in_reply_to_message_id
-        ? await restSingle(
-            `corporate_mail_messages?id=eq.${encodeURIComponent(message.in_reply_to_message_id)}&select=provider_message_id,thread_key`,
-          )
-        : null;
+      const mailbox = await authorizedCorporateMailbox(message.created_by, message.mailbox_id, true);
+      const parent = await authorizedCorporateReplyParent(message);
       const attachmentRows = await restRead(
         `corporate_mail_attachments?send_queue_id=eq.${encodeURIComponent(message.id)}&select=id,storage_key,file_name,content_type,size_bytes,sha256`,
       );
@@ -692,6 +765,7 @@ async function pollCorporateMail() {
           content: content.toString("base64"),
         });
       }
+      await beginDelivery(rpc, "corporate", message);
       const response = await fetch(relayUrl, {
         method: "POST",
         headers: {
@@ -701,6 +775,7 @@ async function pollCorporateMail() {
         },
         body: JSON.stringify({
           id: message.id,
+          claimToken: requireClaim(message),
           from: { address: mailbox.address, name: mailbox.display_name },
           to: message.recipient_addresses,
           cc: message.cc_addresses,
@@ -799,118 +874,45 @@ async function cleanupExpiredCorporateMailUploads() {
   log("info", "corporate_mail.uploads_cleaned", { count: expired.length });
 }
 
-async function updateCorporateOutbox(message, senderAddress, status, errorCode, parent = null) {
-  const now = new Date().toISOString();
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/corporate_mail_send_queue?id=eq.${encodeURIComponent(message.id)}&status=eq.processing`,
-    {
-      method: "PATCH",
-      headers: {
-        ...serviceAuthHeaders,
-        "Content-Type": "application/json",
-        Prefer: "return=minimal",
-      },
-      body: JSON.stringify({
-        status,
-        sent_at: status === "sent" ? now : null,
-        last_error_code: errorCode,
-        available_at:
-          status === "failed" ? new Date(Date.now() + 60_000).toISOString() : message.available_at,
-        updated_at: now,
-      }),
-      signal: AbortSignal.timeout(15_000),
-    },
-  );
-  if (!response.ok)
-    throw Object.assign(new Error("CORPORATE_OUTBOX_UPDATE_FAILED"), {
-      code: `REST_${response.status}`,
-    });
-  if (status !== "sent") return;
-  const recorded = await fetch(`${supabaseUrl}/rest/v1/corporate_mail_messages`, {
-    method: "POST",
-    headers: {
-      ...serviceAuthHeaders,
-      "Content-Type": "application/json",
-      Prefer: "return=representation",
-    },
-    body: JSON.stringify({
-      mailbox_id: message.mailbox_id,
-      provider_message_id: `outbox:${message.id}`,
-      thread_key: parent?.thread_key || parent?.provider_message_id || `outbox:${message.id}`,
-      direction: "outbound",
-      sender_address: senderAddress,
-      recipient_addresses: message.recipient_addresses,
-      subject: message.subject,
-      preview_text: message.body_text.slice(0, 1000),
-      body_text: message.body_text,
-      body_html: message.body_html,
-      received_at: now,
-      read_at: now,
-    }),
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!recorded.ok && recorded.status !== 409)
-    throw Object.assign(new Error("SENT_MESSAGE_RECORD_FAILED"), {
-      code: `REST_${recorded.status}`,
-    });
-  if (recorded.ok) {
-    const rows = await recorded.json();
-    const recordedId = rows?.[0]?.id;
-    if (recordedId) {
-      const moved = await fetch(
-        `${supabaseUrl}/rest/v1/corporate_mail_attachments?send_queue_id=eq.${encodeURIComponent(message.id)}`,
-        {
-          method: "PATCH",
-          headers: {
-            ...serviceAuthHeaders,
-            "Content-Type": "application/json",
-            Prefer: "return=minimal",
-          },
-          body: JSON.stringify({ message_id: recordedId, send_queue_id: null }),
-          signal: AbortSignal.timeout(15_000),
-        },
-      );
-      if (!moved.ok)
-        throw Object.assign(new Error("SENT_ATTACHMENT_RECORD_FAILED"), {
-          code: `REST_${moved.status}`,
-        });
-    }
-  }
+async function updateCorporateOutbox(message, _senderAddress, status, errorCode, _parent = null) {
+  // History, attachments and queue ACK are committed by the same fenced RPC.
+  await finishDelivery(rpc, "corporate", message, status, errorCode);
 }
 
-async function updateOutbox(id, status, errorCode) {
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/email_outbox?id=eq.${encodeURIComponent(id)}&status=eq.processing`,
-    {
-      method: "PATCH",
-      headers: {
-        ...serviceAuthHeaders,
-        "Content-Type": "application/json",
-        Prefer: "return=minimal",
-      },
-      body: JSON.stringify({
-        status,
-        sent_at: status === "sent" ? new Date().toISOString() : null,
-        last_error_code: errorCode,
-        available_at: status === "failed" ? new Date(Date.now() + 60_000).toISOString() : undefined,
-        updated_at: new Date().toISOString(),
-      }),
-      signal: AbortSignal.timeout(15_000),
-    },
-  );
-  if (!response.ok)
-    throw Object.assign(new Error("OUTBOX_UPDATE_FAILED"), { code: `RPC_${response.status}` });
+async function updateOutbox(message, status, errorCode) {
+  await finishDelivery(rpc, "email", message, status, errorCode);
 }
 
 async function cycle() {
+  effectiveWorkerMode = await workerExecutionMode(rpc, { hold: v1MaintenanceHold, validation: v1MaintenanceValidate });
+  if (effectiveWorkerMode === "hold") return;
+  if (effectiveWorkerMode === "validation") {
+    try {
+      if (await rpc("verify_v1_validation_gate", {}) !== true) throw new Error("VALIDATION_GATE_REQUIRED");
+      await pollMail(); await pollWebPush(); await pollCorporateMail();
+    } catch { lastErrorCode = "MAINTENANCE_VALIDATION_FAILED"; }
+    return;
+  }
   lastPollAt = new Date().toISOString();
+  if (authRedirectConfig.enabled && !authRedirectPromise && Date.now() - lastAuthRedirectAttempt > 60_000) {
+    lastAuthRedirectAttempt = Date.now();
+    authRedirectPromise = syncAgencyAuthRedirects({ config: authRedirectConfig, rpc })
+      .catch(() => log("error", "agency.auth_redirect_sync_failed", { errorCode: "AGENCY_AUTH_SYNC_UNAVAILABLE" }))
+      .finally(() => { authRedirectPromise = null; });
+  }
+  if (domainAutomation.enabled && !domainJobPromise) {
+    domainJobPromise = processAgencyDomainJob({ config: domainAutomation, rpc })
+      .catch(() => log("error", "agency.domain_job_failed", { errorCode: "DOMAIN_PROVISIONING_UNAVAILABLE" }))
+      .finally(() => { domainJobPromise = null; });
+  }
   try {
-    await pollJobs();
+    await queuePolling.run("jobs", pollJobs);
+    await rpc("reconcile_accepted_mail", { p_limit: 50 });
     await pollMail();
     await pollWebPush();
-    await pollMailboxProvisioning();
-    await pollStaffIdentities();
-    await pollMailboxDeletions();
+    await queuePolling.run("mailboxProvisioning", pollMailboxProvisioning);
+    await queuePolling.run("staffIdentities", pollStaffIdentities);
+    await queuePolling.run("mailboxDeletions", pollMailboxDeletions);
     await pollCorporateMail();
     if (Date.now() - lastEntitlementExpiryAt > 3_600_000) {
       await rpc("expire_billing_entitlements");
@@ -962,6 +964,20 @@ async function cycle() {
 }
 createServer(async (request, response) => {
   const requestUrl = new URL(request.url || "/", "http://worker");
+  if (requestUrl.pathname === "/internal/mail-receipts") {
+    response.setHeader("Cache-Control", "no-store");
+    if (request.method !== "POST") { response.writeHead(405).end(); return; }
+    if (!receiptAuthorized(request.headers.authorization, env.MAIL_DELIVERY_RELAY_TOKEN)) { response.writeHead(401).end(); return; }
+    try {
+      const body = JSON.parse(await readRequestBody(request, 2048));
+      const result = await receiptRequest({ method: request.method, authorization: request.headers.authorization, token: env.MAIL_DELIVERY_RELAY_TOKEN, hold: v1MaintenanceHold, body, rpc });
+      response.writeHead(result.status, { "Content-Type": "application/json" }).end(JSON.stringify(result.value));
+    } catch { response.writeHead(503).end('{"error":"RECEIPT_UNAVAILABLE"}'); }
+    return;
+  }
+  if ((v1MaintenanceHold || v1MaintenanceValidate) && ["/api/paddle/webhook", "/api/aerodatabox/webhook"].includes(requestUrl.pathname)) {
+    response.writeHead(503, { "Retry-After": "300", "Cache-Control": "no-store" }).end(); return;
+  }
   if (requestUrl.pathname === "/api/aerodatabox/webhook") {
     if (request.method !== "POST") { response.writeHead(405, { Allow: "POST" }).end(); return; }
     if (!validAlertSecret(requestUrl.searchParams.get("secret"), env.AERODATABOX_ALERT_WEBHOOK_SECRET?.trim())) {
@@ -969,6 +985,9 @@ createServer(async (request, response) => {
       return;
     }
     try {
+      if (await workerExecutionMode(rpc, { hold: v1MaintenanceHold, validation: v1MaintenanceValidate }) !== "live") {
+        response.writeHead(503, { "Retry-After": "300", "Cache-Control": "no-store" }).end(); return;
+      }
       const matched = await processAeroDataBoxAlert(JSON.parse(await readRequestBody(request, 524_288)));
       response.writeHead(202, { "Content-Type": "application/json", "Cache-Control": "no-store" }).end(JSON.stringify({ accepted: true, matched }));
     } catch (error) {
@@ -996,6 +1015,9 @@ createServer(async (request, response) => {
           .writeHead(401, { "Content-Type": "application/json", "Cache-Control": "no-store" })
           .end('{"error":"INVALID_SIGNATURE"}');
         return;
+      }
+      if (await workerExecutionMode(rpc, { hold: v1MaintenanceHold, validation: v1MaintenanceValidate }) !== "live") {
+        response.writeHead(503, { "Retry-After": "300", "Cache-Control": "no-store" }).end(); return;
       }
       const event = await enrichPaddleEvent(JSON.parse(rawBody));
       if (
@@ -1028,19 +1050,9 @@ createServer(async (request, response) => {
           .end('{"error":"CHECKOUT_BINDING_UNVERIFIED"}');
         return;
       }
-      const result = await rpc("process_paddle_billing_event", { p_event: event });
+      const result = await rpc("process_paddle_billing_event_v2", { p_event: event });
       // A previous delivery may have committed the event before entitlement creation failed.
       // Re-run the idempotent entitlement step on verified Paddle retries.
-      if (
-        ["processed", "duplicate"].includes(result) &&
-        event.data?.globetrotr_billing_mode === "one_time"
-      )
-        await rpc("apply_paddle_one_time_purchase", { p_event: event });
-      if (
-        ["processed", "duplicate"].includes(result) &&
-        /^(transaction|adjustment)\./.test(event.event_type || "")
-      )
-        await rpc("reconcile_paddle_one_time_purchase", { p_event: event });
       log("info", "paddle.webhook", {
         eventId: event.event_id,
         eventType: event.event_type,
@@ -1101,6 +1113,15 @@ createServer(async (request, response) => {
     }
     return;
   }
+  if (requestUrl.pathname === domainProofPath) {
+    const host = String(request.headers["x-globetrotr-domain"] || "");
+    const proof = domainProof(domainAutomation, host, requestUrl.searchParams.get("nonce") || "");
+    const allowed = proof && domainAutomation.enabled
+      && await rpc("agency_domain_origin_allowed", { p_hostname: host }).catch(() => false);
+    response.writeHead(allowed ? 200 : 404, { "Content-Type": "application/json", "Cache-Control": "private, no-store" })
+      .end(allowed ? JSON.stringify(proof) : '{}');
+    return;
+  }
   if (requestUrl.pathname === "/tls/ask") {
     const domain = String(requestUrl.searchParams.get("domain") || "").toLowerCase();
     const now = Date.now(),
@@ -1113,7 +1134,9 @@ createServer(async (request, response) => {
     }
     try {
       const workspaceId = await activeAgencyWorkspaceForDomain(domain);
-      response.writeHead(workspaceId ? 204 : 403, { "Cache-Control": "no-store" }).end();
+      const issuing = !workspaceId && domainAutomation.enabled
+        && await rpc("agency_domain_origin_allowed", { p_hostname: domain });
+      response.writeHead(workspaceId || issuing ? 204 : 403, { "Cache-Control": "no-store" }).end();
     } catch {
       response.writeHead(503, { "Cache-Control": "no-store" }).end();
     }
@@ -1182,7 +1205,8 @@ createServer(async (request, response) => {
     const alerts = alertConfiguration(env);
     response
       .writeHead(configuration.configured ? 200 : 503, { "Content-Type": "application/json", "Cache-Control": "no-store" })
-      .end(JSON.stringify({ status: configuration.configured ? "configured" : "not_configured", provider: configuration.provider, alerts: alerts.configured ? "configured" : alerts.enabled ? "incomplete" : "disabled", alertBalance: alerts.configured ? flightAlertBalance : null, alertBalanceCheckedAt: alerts.configured ? flightAlertBalanceCheckedAt : null }));
+      .end(JSON.stringify({ status: configuration.configured ? "configured" : "not_configured", provider: configuration.provider, alerts: alerts.configured ? "configured" : alerts.enabled ? "incomplete" : "disabled", alertBalance: alerts.configured ? flightAlertBalance : null, alertBalanceCheckedAt: alerts.configured ? flightAlertBalanceCheckedAt : null,
+        monitoring: flightHealth.snapshot(configuration, alerts, flightAlertBalance, flightAlertBalanceCheckedAt) }));
     return;
   }
   if (request.url !== "/health") {
@@ -1192,13 +1216,16 @@ createServer(async (request, response) => {
   const healthy =
     Boolean(lastSuccessAt) &&
     Date.now() - Date.parse(lastSuccessAt) < Math.max(120_000, pollMs * 4);
-  response.writeHead(healthy ? 200 : 503, {
+  response.writeHead(effectiveWorkerMode !== "live" || healthy ? 200 : 503, {
     "Content-Type": "application/json",
     "Cache-Control": "no-store",
   });
   response.end(
     JSON.stringify({
-      status: healthy ? "ok" : "degraded",
+      status: effectiveWorkerMode !== "live" ? "maintenance" : healthy ? "ok" : "degraded",
+      maintenanceHold: v1MaintenanceHold,
+      maintenanceValidation: v1MaintenanceValidate,
+      effectiveWorkerMode,
       releaseCommit: /^[0-9a-f]{40}$/.test(env.GLOBETROTR_RELEASE_COMMIT || "")
         ? env.GLOBETROTR_RELEASE_COMMIT
         : null,
@@ -1206,6 +1233,7 @@ createServer(async (request, response) => {
       lastPollAt,
       lastSuccessAt,
       lastErrorCode,
+      queuePolling: queuePolling.snapshot(),
       webPush: Object.values(webPushConfiguration()).every(Boolean)
         ? "configured"
         : "not_configured",
@@ -1216,6 +1244,7 @@ createServer(async (request, response) => {
 }).listen(healthPort, "0.0.0.0", () =>
   log("info", "worker.started", {
     pollMs,
+    idlePollMaxMs,
     batchSize,
     healthPort,
     mailRelayConfigured: Boolean(env.MAIL_DELIVERY_RELAY_URL && env.MAIL_DELIVERY_RELAY_TOKEN),

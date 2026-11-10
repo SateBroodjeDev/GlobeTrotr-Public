@@ -42,8 +42,12 @@ export const savePushSubscription = createServerFn({ method: "POST" })
       throw new Error("INVALID_PUSH_SUBSCRIPTION");
     const { publicHttpsHostname } = await import("../../worker/public-network.mjs");
     publicHttpsHostname(data.endpoint);
-    const client = await db(),
-      result = await client
+    const client = await db();
+    const existing = await client.from("web_push_subscriptions").select("user_id")
+      .eq("endpoint", data.endpoint).maybeSingle();
+    if (existing.error || (existing.data && existing.data.user_id !== context.userId))
+      throw new Error("PUSH_SUBSCRIPTION_ACCOUNT_MISMATCH");
+    const result = await client
         .from("web_push_subscriptions")
         .upsert(
           {

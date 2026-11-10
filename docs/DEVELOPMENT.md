@@ -31,6 +31,12 @@ the application. Backend setup requires separately authorised instructions.
 `.env.example` contains synthetic placeholders only. Never commit filled-in
 environment files, private keys, database exports or customer records.
 
+Internal design-preview access and installation-specific monitoring endpoints
+are omitted from this viewing edition. General V1 application source remains
+available. Without a separately authorised development backend, sign-in,
+stored travel data and provider integrations are not operational. A successful
+build does not demonstrate those connected services.
+
 ## Nederlands
 
 Alleen de eigenaar en anderen met afzonderlijke toestemming mogen deze code

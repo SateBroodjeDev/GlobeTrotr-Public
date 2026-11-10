@@ -1,27 +1,20 @@
+import { marketingHead } from "@/lib/marketing-head";
 import { createFileRoute } from "@tanstack/react-router";
 import { BellRing, ShieldCheck, Users } from "lucide-react";
 import { AudiencePage } from "@/components/AudiencePage";
+import { TravelPlanningExample } from "@/components/TravelPlanningExample";
 export const Route = createFileRoute("/for-groups")({
-  head: () => ({
-    meta: [
-      { title: "Groepsreis plannen en kosten verdelen — GlobeTrotr" },
-      {
-        name: "description",
-        content: "Plan je groepsreis samen: deel de route en boekingen, stem over ideeën en verdeel vakantiekosten eerlijk met je reisgenoten.",
-      },
-    ],
-    links: [{ rel: "canonical", href: "https://globetrotr.nl/for-groups" }],
-  }),
-  component: Page,
+  head: () => marketingHead("/for-groups", "nl-NL"),
+  component: GroupsPage,
 });
-function Page() {
+export function GroupsPage() {
   return (
     <AudiencePage
       experience="groups"
       badge={["Voor groepen", "For groups"]}
       title={[
-        "Samen plannen, zonder dat iedereen alles hoeft te beheren.",
-        "Plan together, without everyone managing everything.",
+        "Samen je groepsreis plannen en reiskosten verdelen.",
+        "Plan your group trip and split travel expenses together.",
       ]}
       intro={[
         "Geef iedere deelnemer de juiste rol en houd planning, besluiten, herinneringen en uitgaven voor de hele groep begrijpelijk.",
@@ -64,6 +57,6 @@ function Page() {
           "Plan, vote, settle and keep memories in the same trip",
         ],
       ]}
-    />
+    ><TravelPlanningExample kind="expenses" /></AudiencePage>
   );
 }

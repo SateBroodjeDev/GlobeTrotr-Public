@@ -23,13 +23,14 @@ async function sha256(value: string) {
 
 async function publicTrip(db: any, token: string, tripId: string, pin?: string) {
   if (!uuidPattern.test(tripId) || token.length < 16 || token.length > 200) return null;
+  const authorized = await db.rpc("get_public_trip_limited", {
+    p_token: token, p_trip_id: tripId, p_pin_hash: pin ? await sha256(pin) : null,
+  });
+  if (authorized.error || authorized.data?.status !== "ok") return null;
   const { data: workspace } = await db.from("workspaces").select("workspace_uuid,public_token,branding").eq("public_token", token).maybeSingle();
   if (!workspace) return null;
   const { data: trip } = await db.from("trips").select("trip_uuid,name,is_public,archived,share_pin_hash,workspace_uuid").eq("trip_uuid", tripId).eq("workspace_uuid", workspace.workspace_uuid).eq("is_public", true).eq("archived", false).maybeSingle();
   if (!trip) return null;
-  if (trip.share_pin_hash) {
-    if (!pin || await sha256(pin) !== trip.share_pin_hash) return null;
-  }
   return { trip, workspace };
 }
 

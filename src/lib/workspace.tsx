@@ -23,7 +23,7 @@ import {
   saveWorkspace,
 } from "./cloud.functions";
 import { useAuth } from "./auth";
-import { TEMPLATES, type PlanId, type Trip, type TripTemplate, type WorkspaceState } from "./types";
+import type { PlanId, Trip, TripTemplate, WorkspaceState } from "./types";
 import { GLOBETROTR_BRANDING } from "./branding";
 
 const STORAGE_KEY = "globetrotr.workspace.v1";
@@ -36,12 +36,7 @@ function seed(): WorkspaceState {
     plan: "free",
     role: "owner",
     baseCurrency: "EUR",
-    branding: {
-      brandName: "GlobeTrotr",
-      domain: "globetrotr.nl",
-      accent: 172,
-      tagline: "Plan elke reis. Verantwoord elke euro.",
-    },
+    branding: { ...GLOBETROTR_BRANDING },
     members: [],
     trips: [],
   };
@@ -288,7 +283,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const addTrip = useCallback(
     async (name: string, template: TripTemplate) => {
-      const tpl = TEMPLATES.find((t) => t.id === template)!;
       const today = new Date().toISOString().slice(0, 10);
       let id = user ? crypto.randomUUID() : uid();
       let revision: string | undefined;
@@ -313,7 +307,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
             end: today,
             budget: 1500,
             stops: [],
-            itinerary: tpl.itinerary.map((title) => ({ id: uid(), day: today, title })),
+            itinerary: [],
             expenses: [],
           },
         ],
